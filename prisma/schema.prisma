@@ -1,0 +1,148 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  SUPER_ADMIN
+  FINANCE_OFFICER
+  CLIENT_MANAGER
+  CONTRACTOR
+}
+
+enum ContractorStatus {
+  ACTIVE
+  ON_LEAVE
+  OFFBOARDED
+}
+
+enum ClientStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum RateType {
+  HOURLY
+  RETAINER
+  PER_PROJECT
+}
+
+enum Currency {
+  PHP
+  USD
+  EUR
+  AUD
+}
+
+enum TimesheetStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id           String      @id @default(cuid())
+  name         String
+  email        String      @unique
+  passwordHash String
+  role         Role        @default(FINANCE_OFFICER)
+  contractor   Contractor?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+model Contractor {
+  id             String                     @id @default(cuid())
+  userId         String?                    @unique
+  user           User?                      @relation(fields: [userId], references: [id])
+  name           String
+  email          String                     @unique
+  phone          String?
+  taxId          String?
+  status         ContractorStatus           @default(ACTIVE)
+  startDate      DateTime?
+  endDate        DateTime?
+  notes          String?
+  paymentDetails ContractorPaymentDetail[]
+  engagements    Engagement[]
+  timesheets     Timesheet[]
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+}
+
+model ContractorPaymentDetail {
+  id            String     @id @default(cuid())
+  contractorId  String
+  contractor    Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+  method        String
+  accountName   String
+  accountNumber String
+  bankName      String?
+  isDefault     Boolean    @default(false)
+  createdAt     DateTime   @default(now())
+}
+
+model Client {
+  id              String       @id @default(cuid())
+  name            String
+  email           String?
+  contactPerson   String?
+  billingCurrency Currency     @default(PHP)
+  status          ClientStatus @default(ACTIVE)
+  notes           String?
+  engagements     Engagement[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+model Engagement {
+  id           String       @id @default(cuid())
+  contractorId String
+  contractor   Contractor   @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+  clientId     String
+  client       Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  title        String?
+  rateType     RateType
+  status       String       @default("active")
+  startDate    DateTime
+  endDate      DateTime?
+  rates        Rate[]
+  timesheets   Timesheet[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+model Rate {
+  id            String     @id @default(cuid())
+  engagementId  String
+  engagement    Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  amount        Decimal    @db.Decimal(10, 2)
+  currency      Currency   @default(PHP)
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  notes         String?
+  createdAt     DateTime   @default(now())
+}
+
+model Timesheet {
+  id              String          @id @default(cuid())
+  engagementId    String
+  engagement      Engagement      @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  contractorId    String
+  contractor      Contractor      @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+  date            DateTime
+  hours           Decimal?        @db.Decimal(5, 2)
+  description     String?
+  status          TimesheetStatus @default(SUBMITTED)
+  approvedBy      String?
+  approvedAt      DateTime?
+  rejectionReason String?
+  createdAt       DateTime        @default(now())
+
+  @@unique([engagementId, date])
+}
