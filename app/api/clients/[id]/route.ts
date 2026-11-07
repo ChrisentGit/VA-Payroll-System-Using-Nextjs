@@ -69,6 +69,15 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     if (guard.error) return guard.error
 
     const { id } = await params
+
+    const paidItems = await prisma.payrollLineItem.count({ where: { engagement: { clientId: id } } })
+    if (paidItems > 0) {
+      return NextResponse.json(
+        { error: 'This client has payroll history, so it cannot be deleted' },
+        { status: 409 }
+      )
+    }
+
     await prisma.client.delete({ where: { id } })
     return NextResponse.json({ success: true })
   } catch (error) {

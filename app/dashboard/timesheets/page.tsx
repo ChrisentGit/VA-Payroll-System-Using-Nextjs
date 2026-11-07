@@ -66,13 +66,22 @@ export default async function TimesheetsPage() {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end items-center gap-2">
-                    {t.status === 'SUBMITTED' && <ApprovalButtons id={t.id} />}
-                    <Link href={`/dashboard/timesheets/${t.id}/edit`}>
-                      <Button variant="outline" size="sm">
-                        Edit
-                      </Button>
-                    </Link>
-                    <DeleteTimesheetButton id={t.id} />
+                    {t.payrollLineItemId ? (
+                      <Badge variant="outline">In payroll</Badge>
+                    ) : (
+                      <>
+                        {t.status === 'SUBMITTED' && <ApprovalButtons id={t.id} />}
+                        {t.status === 'APPROVED' && <ApprovalButtons id={t.id} rejectOnly />}
+                        {t.status !== 'APPROVED' && (
+                          <Link href={`/dashboard/timesheets/${t.id}/edit`}>
+                            <Button variant="outline" size="sm">
+                              Edit
+                            </Button>
+                          </Link>
+                        )}
+                        <DeleteTimesheetButton id={t.id} />
+                      </>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>

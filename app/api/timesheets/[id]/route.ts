@@ -6,6 +6,8 @@ interface RouteParams {
   params: Promise<{ id: string }>
 }
 
+const IN_PAYROLL = 'This timesheet is in a payroll run, so it can no longer be changed'
+
 // GET /api/timesheets/[id]
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
@@ -32,7 +34,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-// PATCH /api/timesheets/[id] — edit a draft/submitted entry (not for approval — see /approve, /reject)
+// PATCH /api/timesheets/[id] — edit an entry (not for approval — see /approve, /reject).
+// Editing a rejected entry sends it back for approval.
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     const guard = await authorizeApi('timesheets:manage')
@@ -42,26 +45,48 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const body = await request.json()
     const { date, hours, description } = body
 
+    const existing = await prisma.timesheet.findUnique({ where: { id } })
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Timesheet not found' }, { status: 404 })
+    }
+    if (existing.payrollLineItemId) {
+      return NextResponse.json({ error: IN_PAYROLL }, { status: 409 })
+    }
+    if (existing.status === 'APPROVED') {
+      return NextResponse.json(
+        { error: 'Reject this timesheet first to edit it' },
+        { status: 409 }
+      )
+    }
+
+    const parsedHours = hours === '' || hours === undefined ? null : hours
+
+    if (parsedHours !== null && !(Number(parsedHours) > 0 && Number(parsedHours) <= 24)) {
+      return NextResponse.json(
+        { error: 'Hours must be between 0 and 24' },
+        { status: 400 }
+      )
+    }
+
     const timesheet = await prisma.timesheet.update({
       where: { id },
       data: {
         date: date ? new Date(date) : undefined,
-        hours: hours ?? null,
+        hours: parsedHours,
         description,
+        ...(existing.status === 'REJECTED' && {
+          status: 'SUBMITTED',
+          rejectionReason: null,
+          approvedBy: null,
+          approvedAt: null,
+        }),
       },
       include: { contractor: true, engagement: { include: { client: true } } },
     })
 
     return NextResponse.json(timesheet)
   } catch (error) {
-    if (
-      error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      error.code === 'P2025'
-    ) {
-      return NextResponse.json({ error: 'Timesheet not found' }, { status: 404 })
-    }
     if (
       error &&
       typeof error === 'object' &&
@@ -88,17 +113,18 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     if (guard.error) return guard.error
 
     const { id } = await params
+    const existing = await prisma.timesheet.findUnique({ where: { id } })
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Timesheet not found' }, { status: 404 })
+    }
+    if (existing.payrollLineItemId) {
+      return NextResponse.json({ error: IN_PAYROLL }, { status: 409 })
+    }
+
     await prisma.timesheet.delete({ where: { id } })
     return NextResponse.json({ success: true })
   } catch (error) {
-    if (
-      error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      error.code === 'P2025'
-    ) {
-      return NextResponse.json({ error: 'Timesheet not found' }, { status: 404 })
-    }
     console.error('DELETE /api/timesheets/[id] error:', error)
     return NextResponse.json(
       { error: 'Failed to delete timesheet' },

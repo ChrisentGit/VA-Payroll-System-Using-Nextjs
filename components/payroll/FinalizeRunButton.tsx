@@ -20,7 +20,8 @@ export default function FinalizeRunButton({ runId }: { runId: string }) {
     if (response.ok) {
       router.refresh()
     } else {
-      alert('Failed to finalize payroll run')
+      const data = await response.json()
+      alert(data.error || 'Failed to finalize payroll run')
       setIsFinalizing(false)
     }
   }

@@ -20,7 +20,8 @@ export default function DeleteClientButton({ id }: { id: string }) {
     if (response.ok) {
       router.refresh()
     } else {
-      alert('Failed to delete client')
+      const data = await response.json()
+      alert(data.error || 'Failed to delete client')
       setIsDeleting(false)
     }
   }

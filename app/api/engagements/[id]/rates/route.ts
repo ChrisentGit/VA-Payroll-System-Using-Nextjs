@@ -44,8 +44,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         { status: 400 }
       )
     }
+    if (!(Number(amount) > 0)) {
+      return NextResponse.json({ error: 'amount must be greater than zero' }, { status: 400 })
+    }
 
     const newEffectiveFrom = new Date(effectiveFrom)
+
+    if (Number.isNaN(newEffectiveFrom.getTime())) {
+      return NextResponse.json({ error: 'Invalid effectiveFrom date' }, { status: 400 })
+    }
+
+    const engagement = await prisma.engagement.findUnique({ where: { id } })
+    if (!engagement) {
+      return NextResponse.json({ error: 'Engagement not found' }, { status: 404 })
+    }
 
     // Find the currently "open" rate (no effectiveTo yet) for this engagement
     const currentRate = await prisma.rate.findFirst({
@@ -53,18 +65,24 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       orderBy: { effectiveFrom: 'desc' },
     })
 
-    // Run both writes in a transaction so we never end up with an inconsistent
-    // rate timeline (e.g. new rate created but old one never closed out)
-    const [, newRate] = await prisma.$transaction([
-      ...(currentRate
-        ? [
-            prisma.rate.update({
-              where: { id: currentRate.id },
-              data: { effectiveTo: newEffectiveFrom },
-            }),
-          ]
-        : []),
-      prisma.rate.create({
+    if (currentRate && newEffectiveFrom <= currentRate.effectiveFrom) {
+      return NextResponse.json(
+        { error: 'The new rate must start after the current rate does' },
+        { status: 400 }
+      )
+    }
+
+    // Both writes share a transaction so the rate timeline can never be left
+    // half updated (a new rate added but the old one still open)
+    const newRate = await prisma.$transaction(async (tx) => {
+      if (currentRate) {
+        await tx.rate.update({
+          where: { id: currentRate.id },
+          data: { effectiveTo: newEffectiveFrom },
+        })
+      }
+
+      return tx.rate.create({
         data: {
           engagementId: id,
           amount,
@@ -72,8 +90,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           effectiveFrom: newEffectiveFrom,
           notes: notes || null,
         },
-      }),
-    ])
+      })
+    })
 
     return NextResponse.json(newRate, { status: 201 })
   } catch (error) {

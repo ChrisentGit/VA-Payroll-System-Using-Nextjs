@@ -50,6 +50,21 @@ enum PayrollRunStatus {
   FINALIZED
 }
 
+enum PayFrequency {
+  MONTHLY
+  SEMI_MONTHLY
+}
+
+enum RetainerBasis {
+  PER_MONTH
+  PER_PERIOD
+}
+
+enum ProjectPayMode {
+  ON_COMPLETION
+  MILESTONE
+}
+
 model User {
   id           String      @id @default(cuid())
   name         String
@@ -114,11 +129,14 @@ model Engagement {
   client           Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
   title            String?
   rateType         RateType
+  retainerBasis    RetainerBasis     @default(PER_MONTH)
+  projectPayMode   ProjectPayMode    @default(ON_COMPLETION)
   status           String            @default("active")
   startDate        DateTime
   endDate          DateTime?
   rates            Rate[]
   timesheets       Timesheet[]
+  milestones       Milestone[]
   payrollLineItems PayrollLineItem[]
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
@@ -136,28 +154,51 @@ model Rate {
   createdAt     DateTime   @default(now())
 }
 
+model Milestone {
+  id           String           @id @default(cuid())
+  engagementId String
+  engagement   Engagement       @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  title        String
+  amount       Decimal          @db.Decimal(12, 2)
+  currency     Currency         @default(PHP)
+  completedAt  DateTime?
+  lineItem     PayrollLineItem?
+  createdAt    DateTime         @default(now())
+}
+
 model Timesheet {
-  id              String          @id @default(cuid())
-  engagementId    String
-  engagement      Engagement      @relation(fields: [engagementId], references: [id], onDelete: Cascade)
-  contractorId    String
-  contractor      Contractor      @relation(fields: [contractorId], references: [id], onDelete: Cascade)
-  date            DateTime
-  hours           Decimal?        @db.Decimal(5, 2)
-  description     String?
-  status          TimesheetStatus @default(SUBMITTED)
-  approvedBy      String?
-  approvedAt      DateTime?
-  rejectionReason String?
-  createdAt       DateTime        @default(now())
+  id                String           @id @default(cuid())
+  engagementId      String
+  engagement        Engagement       @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  contractorId      String
+  contractor        Contractor       @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+  date              DateTime
+  hours             Decimal?         @db.Decimal(5, 2)
+  description       String?
+  status            TimesheetStatus  @default(SUBMITTED)
+  approvedBy        String?
+  approvedAt        DateTime?
+  rejectionReason   String?
+  // Set once the timesheet is in a payroll run, which is what stops it being paid twice
+  payrollLineItemId String?
+  payrollLineItem   PayrollLineItem? @relation(fields: [payrollLineItemId], references: [id], onDelete: SetNull)
+  createdAt         DateTime         @default(now())
 
   @@unique([engagementId, date])
+}
+
+model PayrollSettings {
+  id           String       @id @default("default")
+  payFrequency PayFrequency @default(MONTHLY)
+  updatedAt    DateTime     @updatedAt
 }
 
 model PayrollPeriod {
   id        String       @id @default(cuid())
   startDate DateTime
   endDate   DateTime
+  // Copied from settings when the period is created, so later changes leave it alone
+  frequency PayFrequency @default(MONTHLY)
   status    String       @default("open")
   runs      PayrollRun[]
   createdAt DateTime     @default(now())
@@ -167,27 +208,35 @@ model PayrollPeriod {
 
 model PayrollRun {
   id              String            @id @default(cuid())
-  payrollPeriodId String
+  payrollPeriodId String            @unique
   payrollPeriod   PayrollPeriod     @relation(fields: [payrollPeriodId], references: [id], onDelete: Cascade)
   status          PayrollRunStatus  @default(DRAFT)
   lineItems       PayrollLineItem[]
+  warnings        Json              @default("[]")
   generatedAt     DateTime          @default(now())
   finalizedAt     DateTime?
 }
 
 model PayrollLineItem {
-  id           String     @id @default(cuid())
-  payrollRunId String
-  payrollRun   PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
-  engagementId String
-  engagement   Engagement @relation(fields: [engagementId], references: [id])
-  contractorId String
-  contractor   Contractor @relation(fields: [contractorId], references: [id])
-  rateType     RateType
-  hours        Decimal?   @db.Decimal(6, 2)
-  rateAmount   Decimal    @db.Decimal(10, 2)
-  currency     Currency   @default(PHP)
-  totalAmount  Decimal    @db.Decimal(12, 2)
-  notes        String?
-  createdAt    DateTime   @default(now())
+  id             String      @id @default(cuid())
+  payrollRunId   String
+  payrollRun     PayrollRun  @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  engagementId   String
+  engagement     Engagement  @relation(fields: [engagementId], references: [id])
+  contractorId   String
+  contractor     Contractor  @relation(fields: [contractorId], references: [id])
+  rateType       RateType
+  hours          Decimal?    @db.Decimal(6, 2)
+  rateAmount     Decimal     @db.Decimal(10, 2)
+  currency       Currency    @default(PHP)
+  totalAmount    Decimal     @db.Decimal(12, 2)
+  // PHP per 1 unit of currency. Saved on the item so finalized runs never change.
+  exchangeRate   Decimal?    @db.Decimal(12, 6)
+  totalAmountPhp Decimal?    @db.Decimal(14, 2)
+  notes          String?
+  timesheets     Timesheet[]
+  // Unique, so the database itself refuses to pay a milestone twice
+  milestoneId    String?     @unique
+  milestone      Milestone?  @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  createdAt      DateTime    @default(now())
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
+import { getPayrollSettings } from '@/lib/payroll/settings'
 
 // GET /api/payroll-periods — list all periods with their runs
 export async function GET() {
@@ -38,26 +39,40 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return NextResponse.json({ error: 'Invalid date' }, { status: 400 })
+    }
+    if (end < start) {
+      return NextResponse.json(
+        { error: 'End date must be on or after the start date' },
+        { status: 400 }
+      )
+    }
+
+    const overlapping = await prisma.payrollPeriod.findFirst({
+      where: { startDate: { lte: end }, endDate: { gte: start } },
+    })
+
+    if (overlapping) {
+      const from = overlapping.startDate.toISOString().slice(0, 10)
+      const to = overlapping.endDate.toISOString().slice(0, 10)
+      return NextResponse.json(
+        { error: `These dates overlap an existing period (${from} to ${to})` },
+        { status: 409 }
+      )
+    }
+
+    const { payFrequency } = await getPayrollSettings()
+
     const period = await prisma.payrollPeriod.create({
-      data: {
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
-      },
+      data: { startDate: start, endDate: end, frequency: payFrequency },
     })
 
     return NextResponse.json(period, { status: 201 })
   } catch (error) {
-    if (
-      error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      error.code === 'P2002'
-    ) {
-      return NextResponse.json(
-        { error: 'A payroll period with these exact dates already exists' },
-        { status: 409 }
-      )
-    }
     console.error('POST /api/payroll-periods error:', error)
     return NextResponse.json(
       { error: 'Failed to create payroll period' },

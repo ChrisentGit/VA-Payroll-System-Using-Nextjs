@@ -4,7 +4,13 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 
-export default function ApprovalButtons({ id }: { id: string }) {
+export default function ApprovalButtons({
+  id,
+  rejectOnly = false,
+}: {
+  id: string
+  rejectOnly?: boolean
+}) {
   const router = useRouter()
   const [isProcessing, setIsProcessing] = useState(false)
 
@@ -39,9 +45,11 @@ export default function ApprovalButtons({ id }: { id: string }) {
 
   return (
     <div className="flex gap-2">
-      <Button size="sm" onClick={handleApprove} disabled={isProcessing}>
-        Approve
-      </Button>
+      {!rejectOnly && (
+        <Button size="sm" onClick={handleApprove} disabled={isProcessing}>
+          Approve
+        </Button>
+      )}
       <Button size="sm" variant="destructive" onClick={handleReject} disabled={isProcessing}>
         Reject
       </Button>

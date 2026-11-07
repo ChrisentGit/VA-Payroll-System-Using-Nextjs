@@ -7,6 +7,7 @@ interface RouteParams {
 }
 
 // POST /api/timesheets/[id]/reject
+// Also how an approved timesheet is corrected, as long as it is not in a payroll run.
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const guard = await authorizeApi('timesheets:manage')
@@ -24,6 +25,24 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       )
     }
 
+    const existing = await prisma.timesheet.findUnique({ where: { id } })
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Timesheet not found' }, { status: 404 })
+    }
+    if (existing.payrollLineItemId) {
+      return NextResponse.json(
+        { error: 'This timesheet is in a payroll run, so it can no longer be changed' },
+        { status: 409 }
+      )
+    }
+    if (existing.status !== 'SUBMITTED' && existing.status !== 'APPROVED') {
+      return NextResponse.json(
+        { error: 'Only submitted or approved timesheets can be rejected' },
+        { status: 409 }
+      )
+    }
+
     const timesheet = await prisma.timesheet.update({
       where: { id },
       data: {
@@ -37,14 +56,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json(timesheet)
   } catch (error) {
-    if (
-      error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      error.code === 'P2025'
-    ) {
-      return NextResponse.json({ error: 'Timesheet not found' }, { status: 404 })
-    }
     console.error('POST /api/timesheets/[id]/reject error:', error)
     return NextResponse.json(
       { error: 'Failed to reject timesheet' },

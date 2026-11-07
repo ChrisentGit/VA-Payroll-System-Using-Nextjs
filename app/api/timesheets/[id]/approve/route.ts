@@ -14,6 +14,17 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const { session } = guard
 
     const { id } = await params
+    const existing = await prisma.timesheet.findUnique({ where: { id } })
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Timesheet not found' }, { status: 404 })
+    }
+    if (existing.status !== 'SUBMITTED') {
+      return NextResponse.json(
+        { error: 'Only submitted timesheets can be approved' },
+        { status: 409 }
+      )
+    }
 
     const timesheet = await prisma.timesheet.update({
       where: { id },
@@ -28,14 +39,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json(timesheet)
   } catch (error) {
-    if (
-      error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      error.code === 'P2025'
-    ) {
-      return NextResponse.json({ error: 'Timesheet not found' }, { status: 404 })
-    }
     console.error('POST /api/timesheets/[id]/approve error:', error)
     return NextResponse.json(
       { error: 'Failed to approve timesheet' },

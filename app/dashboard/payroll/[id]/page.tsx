@@ -28,9 +28,15 @@ export default async function PayrollPeriodPage({ params }: PageProps) {
         {period.endDate.toLocaleDateString()}
       </h1>
 
-      <div className="mb-6">
-        <GenerateRunButton periodId={period.id} />
-      </div>
+      <p className="text-sm text-gray-500 mb-6">
+        Pay schedule: {period.frequency === 'SEMI_MONTHLY' ? 'Twice a month' : 'Monthly'}
+      </p>
+
+      {period.runs.length === 0 && (
+        <div className="mb-6">
+          <GenerateRunButton periodId={period.id} />
+        </div>
+      )}
 
       <h2 className="text-lg font-medium mb-3">Runs</h2>
       {period.runs.length === 0 ? (

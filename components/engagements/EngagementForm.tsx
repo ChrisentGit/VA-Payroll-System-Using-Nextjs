@@ -27,6 +27,8 @@ interface EngagementFormProps {
     clientId: string
     title: string | null
     rateType: string
+    retainerBasis: string
+    projectPayMode: string
     status: string
     startDate: string | null
     endDate: string | null
@@ -47,6 +49,8 @@ export default function EngagementForm({
     clientId: initialData?.clientId || '',
     title: initialData?.title || '',
     rateType: initialData?.rateType || 'HOURLY',
+    retainerBasis: initialData?.retainerBasis || 'PER_MONTH',
+    projectPayMode: initialData?.projectPayMode || 'ON_COMPLETION',
     status: initialData?.status || 'active',
     startDate: initialData?.startDate?.split('T')[0] || '',
     endDate: initialData?.endDate?.split('T')[0] || '',
@@ -189,6 +193,42 @@ export default function EngagementForm({
           </Select>
         </div>
       </div>
+
+      {formData.rateType === 'RETAINER' && (
+        <div>
+          <Label htmlFor="retainerBasis">Retainer amount is</Label>
+          <Select
+            value={formData.retainerBasis}
+            onValueChange={(value) => handleChange('retainerBasis', value)}
+          >
+            <SelectTrigger id="retainerBasis">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="PER_MONTH">Per month</SelectItem>
+              <SelectItem value="PER_PERIOD">Per pay period</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {formData.rateType === 'PER_PROJECT' && (
+        <div>
+          <Label htmlFor="projectPayMode">Pay this project</Label>
+          <Select
+            value={formData.projectPayMode}
+            onValueChange={(value) => handleChange('projectPayMode', value)}
+          >
+            <SelectTrigger id="projectPayMode">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ON_COMPLETION">Once, on completion</SelectItem>
+              <SelectItem value="MILESTONE">By milestone</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <div>

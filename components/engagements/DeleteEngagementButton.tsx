@@ -22,7 +22,8 @@ export default function DeleteEngagementButton({ id }: { id: string }) {
     if (response.ok) {
       router.refresh()
     } else {
-      alert('Failed to delete engagement')
+      const data = await response.json()
+      alert(data.error || 'Failed to delete engagement')
       setIsDeleting(false)
     }
   }

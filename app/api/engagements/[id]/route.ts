@@ -44,7 +44,17 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     const { id } = await params
     const body = await request.json()
-    const { contractorId, clientId, title, rateType, status, startDate, endDate } = body
+    const {
+      contractorId,
+      clientId,
+      title,
+      rateType,
+      retainerBasis,
+      projectPayMode,
+      status,
+      startDate,
+      endDate,
+    } = body
 
     const engagement = await prisma.engagement.update({
       where: { id },
@@ -53,6 +63,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         clientId,
         title,
         rateType,
+        retainerBasis,
+        projectPayMode,
         status,
         startDate: startDate ? new Date(startDate) : undefined,
         endDate: endDate ? new Date(endDate) : null,
@@ -85,6 +97,15 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     if (guard.error) return guard.error
 
     const { id } = await params
+
+    const paidItems = await prisma.payrollLineItem.count({ where: { engagementId: id } })
+    if (paidItems > 0) {
+      return NextResponse.json(
+        { error: 'This engagement has payroll history, so it cannot be deleted' },
+        { status: 409 }
+      )
+    }
+
     await prisma.engagement.delete({ where: { id } })
     return NextResponse.json({ success: true })
   } catch (error) {

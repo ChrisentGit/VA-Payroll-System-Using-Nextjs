@@ -41,6 +41,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (hours && !(Number(hours) > 0 && Number(hours) <= 24)) {
+      return NextResponse.json(
+        { error: 'Hours must be between 0 and 24' },
+        { status: 400 }
+      )
+    }
+
     // Look up the engagement to get its contractorId (avoids trusting client input for this)
     const engagement = await prisma.engagement.findUnique({
       where: { id: engagementId },
@@ -57,7 +64,7 @@ export async function POST(request: NextRequest) {
         date: new Date(date),
         hours: hours || null,
         description: description || null,
-        status: status || 'SUBMITTED',
+        status: status === 'DRAFT' ? 'DRAFT' : 'SUBMITTED',
       },
       include: { contractor: true, engagement: { include: { client: true } } },
     })
