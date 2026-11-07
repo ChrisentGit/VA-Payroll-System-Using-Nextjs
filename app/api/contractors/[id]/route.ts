@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { authorizeApi } from '@/lib/authz'
+import { can } from '@/lib/permissions'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -8,8 +10,14 @@ interface RouteParams {
 // GET /api/contractors/[id]
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    const guard = await authorizeApi('directory:read')
+    if (guard.error) return guard.error
+
     const { id } = await params
-    const contractor = await prisma.contractor.findUnique({ where: { id } })
+    const contractor = await prisma.contractor.findUnique({
+      where: { id },
+      omit: { taxId: !can(guard.session.user.role, 'contractors:sensitive') },
+    })
 
     if (!contractor) {
       return NextResponse.json({ error: 'Contractor not found' }, { status: 404 })
@@ -28,6 +36,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 // PATCH /api/contractors/[id]
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
+    const guard = await authorizeApi('directory:write')
+    if (guard.error) return guard.error
+
     const { id } = await params
     const body = await request.json()
     const { name, email, phone, taxId, status, startDate, endDate, notes } = body
@@ -80,6 +91,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 // DELETE /api/contractors/[id]
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
+    const guard = await authorizeApi('directory:write')
+    if (guard.error) return guard.error
+
     const { id } = await params
     await prisma.contractor.delete({ where: { id } })
     return NextResponse.json({ success: true })

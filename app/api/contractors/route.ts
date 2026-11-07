@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { authorizeApi } from '@/lib/authz'
 
 // GET /api/contractors — list all contractors
 export async function GET() {
   try {
+    const guard = await authorizeApi('directory:read')
+    if (guard.error) return guard.error
+
     const contractors = await prisma.contractor.findMany({
       orderBy: { createdAt: 'desc' },
     })
@@ -20,6 +24,9 @@ export async function GET() {
 // POST /api/contractors — create a new contractor
 export async function POST(request: NextRequest) {
   try {
+    const guard = await authorizeApi('directory:write')
+    if (guard.error) return guard.error
+
     const body = await request.json()
     const { name, email, phone, taxId, status, startDate, endDate, notes } = body
 

@@ -1,3 +1,4 @@
+import { requirePagePermission } from '@/lib/authz'
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { Button } from '@/components/ui/button'
@@ -12,6 +13,8 @@ import {
 } from '@/components/ui/table'
 
 export default async function PayrollPage() {
+  await requirePagePermission('payroll:manage')
+
   const periods = await prisma.payrollPeriod.findMany({
     orderBy: { startDate: 'desc' },
     include: { runs: true },

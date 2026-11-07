@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { authorizeApi } from '@/lib/authz'
 
 // GET /api/engagements — list all engagements with related contractor/client/rates
 export async function GET() {
   try {
+    const guard = await authorizeApi('directory:read')
+    if (guard.error) return guard.error
+
     const engagements = await prisma.engagement.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
@@ -25,6 +29,9 @@ export async function GET() {
 // POST /api/engagements — create engagement + its first rate together
 export async function POST(request: NextRequest) {
   try {
+    const guard = await authorizeApi('directory:write')
+    if (guard.error) return guard.error
+
     const body = await request.json()
     const {
       contractorId,

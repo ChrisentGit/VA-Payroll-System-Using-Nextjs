@@ -1,3 +1,5 @@
+import { requirePagePermission } from '@/lib/authz'
+import { can } from '@/lib/permissions'
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { Button } from '@/components/ui/button'
@@ -13,6 +15,9 @@ import {
 import DeleteContractorButton from '@/components/contractors/DeleteContractorButton'
 
 export default async function ContractorsPage() {
+  const session = await requirePagePermission('directory:read')
+  const canEdit = can(session.user.role, 'directory:write')
+
   const contractors = await prisma.contractor.findMany({
     orderBy: { createdAt: 'desc' },
   })
@@ -21,9 +26,11 @@ export default async function ContractorsPage() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold">Contractors</h1>
-        <Link href="/dashboard/contractors/new">
-          <Button>Add Contractor</Button>
-        </Link>
+        {canEdit && (
+          <Link href="/dashboard/contractors/new">
+            <Button>Add Contractor</Button>
+          </Link>
+        )}
       </div>
 
       {contractors.length === 0 ? (
@@ -36,7 +43,7 @@ export default async function ContractorsPage() {
               <TableHead>Email</TableHead>
               <TableHead>Phone</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              {canEdit && <TableHead className="text-right">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -52,14 +59,16 @@ export default async function ContractorsPage() {
                     {c.status}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-right space-x-2">
-                  <Link href={`/dashboard/contractors/${c.id}/edit`}>
-                    <Button variant="outline" size="sm">
-                      Edit
-                    </Button>
-                  </Link>
-                  <DeleteContractorButton id={c.id} />
-                </TableCell>
+                {canEdit && (
+                  <TableCell className="text-right space-x-2">
+                    <Link href={`/dashboard/contractors/${c.id}/edit`}>
+                      <Button variant="outline" size="sm">
+                        Edit
+                      </Button>
+                    </Link>
+                    <DeleteContractorButton id={c.id} />
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>

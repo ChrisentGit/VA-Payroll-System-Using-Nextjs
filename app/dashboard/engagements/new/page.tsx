@@ -1,7 +1,10 @@
+import { requirePagePermission } from '@/lib/authz'
 import { prisma } from '@/lib/prisma'
 import EngagementForm from '@/components/engagements/EngagementForm'
 
 export default async function NewEngagementPage() {
+  await requirePagePermission('directory:write')
+
   const [contractors, clients] = await Promise.all([
     prisma.contractor.findMany({ orderBy: { name: 'asc' } }),
     prisma.client.findMany({ orderBy: { name: 'asc' } }),

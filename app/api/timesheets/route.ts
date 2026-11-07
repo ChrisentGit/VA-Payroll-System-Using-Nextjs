@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { authorizeApi } from '@/lib/authz'
 
 // GET /api/timesheets — list all timesheets
 export async function GET() {
   try {
+    const guard = await authorizeApi('timesheets:manage')
+    if (guard.error) return guard.error
+
     const timesheets = await prisma.timesheet.findMany({
       orderBy: { date: 'desc' },
       include: {
@@ -24,6 +28,9 @@ export async function GET() {
 // POST /api/timesheets — create a new timesheet entry
 export async function POST(request: NextRequest) {
   try {
+    const guard = await authorizeApi('timesheets:manage')
+    if (guard.error) return guard.error
+
     const body = await request.json()
     const { engagementId, date, hours, description, status } = body
 

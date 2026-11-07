@@ -1,3 +1,4 @@
+import { requirePagePermission } from '@/lib/authz'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { Badge } from '@/components/ui/badge'
@@ -16,6 +17,8 @@ interface PageProps {
 }
 
 export default async function PayrollRunPage({ params }: PageProps) {
+  await requirePagePermission('payroll:manage')
+
   const { id } = await params
   const run = await prisma.payrollRun.findUnique({
     where: { id },

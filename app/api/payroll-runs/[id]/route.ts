@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { authorizeApi } from '@/lib/authz'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -8,6 +9,9 @@ interface RouteParams {
 // GET /api/payroll-runs/[id]
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    const guard = await authorizeApi('payroll:manage')
+    if (guard.error) return guard.error
+
     const { id } = await params
     const run = await prisma.payrollRun.findUnique({
       where: { id },
@@ -36,6 +40,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 // DELETE /api/payroll-runs/[id] — only allowed while still DRAFT (e.g. to regenerate)
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
+    const guard = await authorizeApi('payroll:manage')
+    if (guard.error) return guard.error
+
     const { id } = await params
     const run = await prisma.payrollRun.findUnique({ where: { id } })
 

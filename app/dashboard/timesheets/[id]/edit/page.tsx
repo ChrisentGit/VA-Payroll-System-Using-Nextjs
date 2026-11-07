@@ -1,3 +1,4 @@
+import { requirePagePermission } from '@/lib/authz'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import TimesheetForm from '@/components/timesheets/TimesheetForm'
@@ -7,6 +8,8 @@ interface EditPageProps {
 }
 
 export default async function EditTimesheetPage({ params }: EditPageProps) {
+  await requirePagePermission('timesheets:manage')
+
   const { id } = await params
 
   const [timesheet, engagements] = await Promise.all([

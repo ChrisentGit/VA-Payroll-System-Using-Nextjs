@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { authorizeApi } from '@/lib/authz'
 
 // GET /api/payroll-periods — list all periods with their runs
 export async function GET() {
   try {
+    const guard = await authorizeApi('payroll:manage')
+    if (guard.error) return guard.error
+
     const periods = await prisma.payrollPeriod.findMany({
       orderBy: { startDate: 'desc' },
       include: { runs: true },
@@ -21,6 +25,9 @@ export async function GET() {
 // POST /api/payroll-periods — create a new period
 export async function POST(request: NextRequest) {
   try {
+    const guard = await authorizeApi('payroll:manage')
+    if (guard.error) return guard.error
+
     const body = await request.json()
     const { startDate, endDate } = body
 

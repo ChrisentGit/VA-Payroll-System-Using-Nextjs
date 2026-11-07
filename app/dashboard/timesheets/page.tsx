@@ -1,3 +1,4 @@
+import { requirePagePermission } from '@/lib/authz'
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { Button } from '@/components/ui/button'
@@ -21,6 +22,8 @@ const statusVariant: Record<string, 'default' | 'secondary' | 'destructive'> = {
 }
 
 export default async function TimesheetsPage() {
+  await requirePagePermission('timesheets:manage')
+
   const timesheets = await prisma.timesheet.findMany({
     orderBy: { date: 'desc' },
     include: { contractor: true, engagement: { include: { client: true } } },

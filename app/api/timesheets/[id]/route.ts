@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { authorizeApi } from '@/lib/authz'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -8,6 +9,9 @@ interface RouteParams {
 // GET /api/timesheets/[id]
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    const guard = await authorizeApi('timesheets:manage')
+    if (guard.error) return guard.error
+
     const { id } = await params
     const timesheet = await prisma.timesheet.findUnique({
       where: { id },
@@ -31,6 +35,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 // PATCH /api/timesheets/[id] — edit a draft/submitted entry (not for approval — see /approve, /reject)
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
+    const guard = await authorizeApi('timesheets:manage')
+    if (guard.error) return guard.error
+
     const { id } = await params
     const body = await request.json()
     const { date, hours, description } = body
@@ -77,6 +84,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 // DELETE /api/timesheets/[id]
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
+    const guard = await authorizeApi('timesheets:manage')
+    if (guard.error) return guard.error
+
     const { id } = await params
     await prisma.timesheet.delete({ where: { id } })
     return NextResponse.json({ success: true })

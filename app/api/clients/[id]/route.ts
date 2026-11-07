@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { authorizeApi } from '@/lib/authz'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -8,6 +9,9 @@ interface RouteParams {
 // GET /api/clients/[id]
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    const guard = await authorizeApi('directory:read')
+    if (guard.error) return guard.error
+
     const { id } = await params
     const client = await prisma.client.findUnique({ where: { id } })
 
@@ -28,6 +32,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 // PATCH /api/clients/[id]
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
+    const guard = await authorizeApi('directory:write')
+    if (guard.error) return guard.error
+
     const { id } = await params
     const body = await request.json()
     const { name, email, contactPerson, billingCurrency, status, notes } = body
@@ -58,6 +65,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 // DELETE /api/clients/[id]
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
+    const guard = await authorizeApi('directory:write')
+    if (guard.error) return guard.error
+
     const { id } = await params
     await prisma.client.delete({ where: { id } })
     return NextResponse.json({ success: true })

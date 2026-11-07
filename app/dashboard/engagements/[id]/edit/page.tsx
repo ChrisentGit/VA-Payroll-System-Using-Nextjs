@@ -1,3 +1,4 @@
+import { requirePagePermission } from '@/lib/authz'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import EngagementForm from '@/components/engagements/EngagementForm'
@@ -8,6 +9,8 @@ interface EditPageProps {
 }
 
 export default async function EditEngagementPage({ params }: EditPageProps) {
+  await requirePagePermission('directory:write')
+
   const { id } = await params
 
   const [engagement, contractors, clients, rates] = await Promise.all([

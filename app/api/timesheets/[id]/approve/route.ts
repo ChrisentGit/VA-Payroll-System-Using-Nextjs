@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { auth } from '@/lib/auth'
+import { authorizeApi } from '@/lib/authz'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -9,10 +9,9 @@ interface RouteParams {
 // POST /api/timesheets/[id]/approve
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    const session = await auth()
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const guard = await authorizeApi('timesheets:manage')
+    if (guard.error) return guard.error
+    const { session } = guard
 
     const { id } = await params
 

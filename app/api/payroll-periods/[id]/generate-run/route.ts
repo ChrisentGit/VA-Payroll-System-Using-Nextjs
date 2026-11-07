@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { authorizeApi } from '@/lib/authz'
 import { Prisma } from '@prisma/client'
 
 interface RouteParams {
@@ -11,6 +12,9 @@ interface RouteParams {
 // within the period's date range, and builds a draft PayrollRun with line items.
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
+    const guard = await authorizeApi('payroll:manage')
+    if (guard.error) return guard.error
+
     const { id: periodId } = await params
 
     const period = await prisma.payrollPeriod.findUnique({ where: { id: periodId } })

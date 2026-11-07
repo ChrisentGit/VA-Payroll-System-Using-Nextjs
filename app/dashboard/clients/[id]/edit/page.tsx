@@ -1,3 +1,4 @@
+import { requirePagePermission } from '@/lib/authz'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import ClientForm from '@/components/clients/ClientForm'
@@ -7,6 +8,8 @@ interface EditPageProps {
 }
 
 export default async function EditClientPage({ params }: EditPageProps) {
+  await requirePagePermission('directory:write')
+
   const { id } = await params
   const client = await prisma.client.findUnique({ where: { id } })
 

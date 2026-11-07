@@ -1,3 +1,4 @@
+import { requirePagePermission } from '@/lib/authz'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
@@ -10,6 +11,8 @@ interface PageProps {
 }
 
 export default async function PayrollPeriodPage({ params }: PageProps) {
+  await requirePagePermission('payroll:manage')
+
   const { id } = await params
   const period = await prisma.payrollPeriod.findUnique({
     where: { id },

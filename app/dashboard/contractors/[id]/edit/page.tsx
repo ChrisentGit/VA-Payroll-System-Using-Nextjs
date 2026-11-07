@@ -1,3 +1,4 @@
+import { requirePagePermission } from '@/lib/authz'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import ContractorForm from '@/components/contractors/ContractorForm'
@@ -7,8 +8,13 @@ interface EditPageProps {
 }
 
 export default async function EditContractorPage({ params }: EditPageProps) {
+  await requirePagePermission('directory:write')
+
   const { id } = await params
-  const contractor = await prisma.contractor.findUnique({ where: { id } })
+  const contractor = await prisma.contractor.findUnique({
+    where: { id },
+    omit: { taxId: false },
+  })
 
   if (!contractor) {
     notFound()

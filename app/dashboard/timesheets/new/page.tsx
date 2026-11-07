@@ -1,7 +1,10 @@
+import { requirePagePermission } from '@/lib/authz'
 import { prisma } from '@/lib/prisma'
 import TimesheetForm from '@/components/timesheets/TimesheetForm'
 
 export default async function NewTimesheetPage() {
+  await requirePagePermission('timesheets:manage')
+
   const engagements = await prisma.engagement.findMany({
     where: { status: 'active' },
     include: { contractor: true, client: true },
