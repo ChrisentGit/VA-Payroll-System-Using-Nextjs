@@ -45,6 +45,11 @@ enum TimesheetStatus {
   REJECTED
 }
 
+enum PayrollRunStatus {
+  DRAFT
+  FINALIZED
+}
+
 model User {
   id           String      @id @default(cuid())
   name         String
@@ -57,22 +62,23 @@ model User {
 }
 
 model Contractor {
-  id             String                     @id @default(cuid())
-  userId         String?                    @unique
-  user           User?                      @relation(fields: [userId], references: [id])
-  name           String
-  email          String                     @unique
-  phone          String?
-  taxId          String?
-  status         ContractorStatus           @default(ACTIVE)
-  startDate      DateTime?
-  endDate        DateTime?
-  notes          String?
-  paymentDetails ContractorPaymentDetail[]
-  engagements    Engagement[]
-  timesheets     Timesheet[]
-  createdAt      DateTime                   @default(now())
-  updatedAt      DateTime                   @updatedAt
+  id               String                    @id @default(cuid())
+  userId           String?                   @unique
+  user             User?                     @relation(fields: [userId], references: [id])
+  name             String
+  email            String                    @unique
+  phone            String?
+  taxId            String?
+  status           ContractorStatus          @default(ACTIVE)
+  startDate        DateTime?
+  endDate          DateTime?
+  notes            String?
+  paymentDetails   ContractorPaymentDetail[]
+  engagements      Engagement[]
+  timesheets       Timesheet[]
+  payrollLineItems PayrollLineItem[]
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
 }
 
 model ContractorPaymentDetail {
@@ -101,20 +107,21 @@ model Client {
 }
 
 model Engagement {
-  id           String       @id @default(cuid())
-  contractorId String
-  contractor   Contractor   @relation(fields: [contractorId], references: [id], onDelete: Cascade)
-  clientId     String
-  client       Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  title        String?
-  rateType     RateType
-  status       String       @default("active")
-  startDate    DateTime
-  endDate      DateTime?
-  rates        Rate[]
-  timesheets   Timesheet[]
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  id               String            @id @default(cuid())
+  contractorId     String
+  contractor       Contractor        @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+  clientId         String
+  client           Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  title            String?
+  rateType         RateType
+  status           String            @default("active")
+  startDate        DateTime
+  endDate          DateTime?
+  rates            Rate[]
+  timesheets       Timesheet[]
+  payrollLineItems PayrollLineItem[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 }
 
 model Rate {
@@ -145,4 +152,42 @@ model Timesheet {
   createdAt       DateTime        @default(now())
 
   @@unique([engagementId, date])
+}
+
+model PayrollPeriod {
+  id        String       @id @default(cuid())
+  startDate DateTime
+  endDate   DateTime
+  status    String       @default("open")
+  runs      PayrollRun[]
+  createdAt DateTime     @default(now())
+
+  @@unique([startDate, endDate])
+}
+
+model PayrollRun {
+  id              String            @id @default(cuid())
+  payrollPeriodId String
+  payrollPeriod   PayrollPeriod     @relation(fields: [payrollPeriodId], references: [id], onDelete: Cascade)
+  status          PayrollRunStatus  @default(DRAFT)
+  lineItems       PayrollLineItem[]
+  generatedAt     DateTime          @default(now())
+  finalizedAt     DateTime?
+}
+
+model PayrollLineItem {
+  id           String     @id @default(cuid())
+  payrollRunId String
+  payrollRun   PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  engagementId String
+  engagement   Engagement @relation(fields: [engagementId], references: [id])
+  contractorId String
+  contractor   Contractor @relation(fields: [contractorId], references: [id])
+  rateType     RateType
+  hours        Decimal?   @db.Decimal(6, 2)
+  rateAmount   Decimal    @db.Decimal(10, 2)
+  currency     Currency   @default(PHP)
+  totalAmount  Decimal    @db.Decimal(12, 2)
+  notes        String?
+  createdAt    DateTime   @default(now())
 }
