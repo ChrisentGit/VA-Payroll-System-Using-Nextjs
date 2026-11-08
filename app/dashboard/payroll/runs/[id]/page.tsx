@@ -14,6 +14,11 @@ import {
 import FinalizeRunButton from '@/components/payroll/FinalizeRunButton'
 import DeleteRunButton from '@/components/payroll/DeleteRunButton'
 import ExchangeRateForm from '@/components/payroll/ExchangeRateForm'
+import PaymentButtons from '@/components/payroll/PaymentButtons'
+import { Button } from '@/components/ui/button'
+import { formatDate, formatMoney } from '@/lib/format'
+import { groupPayments } from '@/lib/payroll/payments'
+import Link from 'next/link'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -75,6 +80,15 @@ export default async function PayrollRunPage({ params }: PageProps) {
         <div className="flex gap-3 mb-6">
           <FinalizeRunButton runId={run.id} />
           <DeleteRunButton runId={run.id} periodId={run.payrollPeriodId} />
+        </div>
+      )}
+
+      {!isDraft && (
+        <div className="flex gap-3 mb-6">
+          {/* A plain link on purpose: the response is a file download */}
+          <a href={`/api/payroll-runs/${run.id}/export`}>
+            <Button variant="outline">Export CSV</Button>
+          </a>
         </div>
       )}
 
@@ -153,6 +167,57 @@ export default async function PayrollRunPage({ params }: PageProps) {
                   : 'No PHP conversion was recorded for this run'}
             </div>
           </div>
+
+          {!isDraft && (
+            <section className="mt-10">
+              <h2 className="text-lg font-semibold mb-3">Payments</h2>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Contractor</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Paid to</TableHead>
+                    <TableHead>Reference</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {groupPayments(run.lineItems).map((payment) => (
+                    <TableRow key={payment.contractorId}>
+                      <TableCell>{payment.first.contractor.name}</TableCell>
+                      <TableCell>{formatMoney('PHP', payment.phpTotal)}</TableCell>
+                      <TableCell>
+                        <Badge variant={payment.isPaid ? 'default' : 'secondary'}>
+                          {payment.isPaid && payment.first.paidAt
+                            ? `Paid ${formatDate(payment.first.paidAt)}`
+                            : 'Unpaid'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{payment.isPaid ? payment.first.paidTo || '—' : '—'}</TableCell>
+                      <TableCell>
+                        {payment.isPaid ? payment.first.paymentReference || '—' : '—'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Link href={`/dashboard/payroll/runs/${run.id}/payslips/${payment.contractorId}`}>
+                            <Button variant="outline" size="sm">
+                              Payslip
+                            </Button>
+                          </Link>
+                          <PaymentButtons
+                            runId={run.id}
+                            contractorId={payment.contractorId}
+                            isPaid={payment.isPaid}
+                          />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </section>
+          )}
         </>
       )}
     </div>
