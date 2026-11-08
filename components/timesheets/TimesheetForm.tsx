@@ -22,6 +22,9 @@ interface Option {
 interface TimesheetFormProps {
   engagements: Option[]
   timesheetId?: string
+  // The contractor portal saves through its own API and returns to its own list
+  apiPath?: string
+  returnTo?: string
   initialData?: {
     engagementId: string
     date: string
@@ -33,6 +36,8 @@ interface TimesheetFormProps {
 export default function TimesheetForm({
   engagements,
   timesheetId,
+  apiPath = '/api/timesheets',
+  returnTo = '/dashboard/timesheets',
   initialData,
 }: TimesheetFormProps) {
   const router = useRouter()
@@ -58,7 +63,7 @@ export default function TimesheetForm({
     setIsSubmitting(true)
 
     try {
-      const url = isEditing ? `/api/timesheets/${timesheetId}` : '/api/timesheets'
+      const url = isEditing ? `${apiPath}/${timesheetId}` : apiPath
       const method = isEditing ? 'PATCH' : 'POST'
 
       const response = await fetch(url, {
@@ -75,7 +80,7 @@ export default function TimesheetForm({
         return
       }
 
-      router.push('/dashboard/timesheets')
+      router.push(returnTo)
       router.refresh()
     } catch (err) {
       console.error('Form submit error:', err)
@@ -156,7 +161,7 @@ export default function TimesheetForm({
         <Button
           type="button"
           variant="outline"
-          onClick={() => router.push('/dashboard/timesheets')}
+          onClick={() => router.push(returnTo)}
         >
           Cancel
         </Button>

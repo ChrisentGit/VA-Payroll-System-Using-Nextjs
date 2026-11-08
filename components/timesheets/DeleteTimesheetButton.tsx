@@ -4,7 +4,13 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 
-export default function DeleteTimesheetButton({ id }: { id: string }) {
+export default function DeleteTimesheetButton({
+  id,
+  apiPath = '/api/timesheets',
+}: {
+  id: string
+  apiPath?: string
+}) {
   const router = useRouter()
   const [isDeleting, setIsDeleting] = useState(false)
 
@@ -13,7 +19,7 @@ export default function DeleteTimesheetButton({ id }: { id: string }) {
     if (!confirmed) return
 
     setIsDeleting(true)
-    const response = await fetch(`/api/timesheets/${id}`, {
+    const response = await fetch(`${apiPath}/${id}`, {
       method: 'DELETE',
     })
 
