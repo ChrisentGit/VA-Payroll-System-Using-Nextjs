@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
+import { recordAudit } from '@/lib/audit'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -40,6 +41,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     const guard = await authorizeApi('timesheets:manage')
     if (guard.error) return guard.error
+    const { session } = guard
 
     const { id } = await params
     const body = await request.json()
@@ -69,21 +71,29 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    const timesheet = await prisma.timesheet.update({
-      where: { id },
-      data: {
-        date: date ? new Date(date) : undefined,
-        hours: parsedHours,
-        description,
-        ...(existing.status === 'REJECTED' && {
-          status: 'SUBMITTED',
-          rejectionReason: null,
-          approvedBy: null,
-          approvedAt: null,
-        }),
-      },
-      include: { contractor: true, engagement: { include: { client: true } } },
-    })
+    const [timesheet] = await prisma.$transaction([
+      prisma.timesheet.update({
+        where: { id },
+        data: {
+          date: date ? new Date(date) : undefined,
+          hours: parsedHours,
+          description,
+          ...(existing.status === 'REJECTED' && {
+            status: 'SUBMITTED',
+            rejectionReason: null,
+            approvedBy: null,
+            approvedAt: null,
+          }),
+        },
+        include: { contractor: true, engagement: { include: { client: true } } },
+      }),
+      recordAudit(prisma, session, {
+        action: 'timesheet.updated',
+        entityType: 'Timesheet',
+        entityId: id,
+        metadata: { date, hours: parsedHours },
+      }),
+    ])
 
     return NextResponse.json(timesheet)
   } catch (error) {
@@ -111,6 +121,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const guard = await authorizeApi('timesheets:manage')
     if (guard.error) return guard.error
+    const { session } = guard
 
     const { id } = await params
     const existing = await prisma.timesheet.findUnique({ where: { id } })
@@ -122,7 +133,14 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: IN_PAYROLL }, { status: 409 })
     }
 
-    await prisma.timesheet.delete({ where: { id } })
+    await prisma.$transaction([
+      prisma.timesheet.delete({ where: { id } }),
+      recordAudit(prisma, session, {
+        action: 'timesheet.deleted',
+        entityType: 'Timesheet',
+        entityId: id,
+      }),
+    ])
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('DELETE /api/timesheets/[id] error:', error)

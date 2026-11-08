@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
+import { recordAudit } from '@/lib/audit'
 import { convertToPhp } from '@/lib/payroll/calculate'
 
 interface RouteParams {
@@ -14,6 +15,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     const guard = await authorizeApi('payroll:manage')
     if (guard.error) return guard.error
+    const { session } = guard
 
     const { id } = await params
     const { rates } = await request.json()
@@ -57,8 +59,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       parsed.set(currency, rate)
     }
 
-    await prisma.$transaction(
-      run.lineItems
+    await prisma.$transaction([
+      ...run.lineItems
         .filter((li) => parsed.has(li.currency))
         .map((li) => {
           const rate = parsed.get(li.currency) as Prisma.Decimal
@@ -69,8 +71,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
               totalAmountPhp: convertToPhp(li.totalAmount, rate),
             },
           })
-        })
-    )
+        }),
+      recordAudit(prisma, session, {
+        action: 'payroll.exchange_rates_set',
+        entityType: 'PayrollRun',
+        entityId: id,
+        metadata: Object.fromEntries([...parsed].map(([c, r]) => [c, r.toString()])),
+      }),
+    ])
 
     return NextResponse.json({ success: true })
   } catch (error) {

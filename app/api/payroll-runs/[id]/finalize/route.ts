@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
+import { recordAudit } from '@/lib/audit'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -11,6 +12,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const guard = await authorizeApi('payroll:manage')
     if (guard.error) return guard.error
+    const { session } = guard
 
     const { id } = await params
     const run = await prisma.payrollRun.findUnique({
@@ -55,6 +57,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       prisma.payrollPeriod.update({
         where: { id: run.payrollPeriodId },
         data: { status: 'closed' },
+      }),
+      recordAudit(prisma, session, {
+        action: 'payroll.run_finalized',
+        entityType: 'PayrollRun',
+        entityId: id,
+        metadata: { lineItems: run.lineItems.length },
       }),
     ])
 

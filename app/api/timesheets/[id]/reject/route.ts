@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
+import { recordAudit } from '@/lib/audit'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -43,16 +44,24 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    const timesheet = await prisma.timesheet.update({
-      where: { id },
-      data: {
-        status: 'REJECTED',
-        approvedBy: session.user.name || session.user.email || 'Unknown',
-        approvedAt: new Date(),
-        rejectionReason,
-      },
-      include: { contractor: true, engagement: { include: { client: true } } },
-    })
+    const [timesheet] = await prisma.$transaction([
+      prisma.timesheet.update({
+        where: { id },
+        data: {
+          status: 'REJECTED',
+          approvedBy: session.user.name || session.user.email || 'Unknown',
+          approvedAt: new Date(),
+          rejectionReason,
+        },
+        include: { contractor: true, engagement: { include: { client: true } } },
+      }),
+      recordAudit(prisma, session, {
+        action: 'timesheet.rejected',
+        entityType: 'Timesheet',
+        entityId: id,
+        metadata: { rejectionReason },
+      }),
+    ])
 
     return NextResponse.json(timesheet)
   } catch (error) {

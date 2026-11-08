@@ -1,4 +1,6 @@
+import type { Session } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { recordAudit } from '@/lib/audit'
 import {
   calculateHourly,
   calculateMilestones,
@@ -25,7 +27,7 @@ const names = {
 }
 
 // Builds a draft run in one transaction, so a failure leaves nothing behind.
-export async function generateRun(periodId: string) {
+export async function generateRun(periodId: string, session: Session) {
   return prisma.$transaction(
     async (tx) => {
       const period = await tx.payrollPeriod.findUnique({
@@ -150,6 +152,13 @@ export async function generateRun(periodId: string) {
           })
         }
       }
+
+      await recordAudit(tx, session, {
+        action: 'payroll.run_generated',
+        entityType: 'PayrollRun',
+        entityId: run.id,
+        metadata: { periodId: period.id, lineItems: items.length, warnings: warnings.length },
+      })
 
       return tx.payrollRun.findUniqueOrThrow({
         where: { id: run.id },

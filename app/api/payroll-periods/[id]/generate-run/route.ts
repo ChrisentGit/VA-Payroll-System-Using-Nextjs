@@ -13,7 +13,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (guard.error) return guard.error
 
     const { id } = await params
-    const run = await generateRun(id)
+    const run = await generateRun(id, guard.session)
 
     return NextResponse.json(run, { status: 201 })
   } catch (error) {

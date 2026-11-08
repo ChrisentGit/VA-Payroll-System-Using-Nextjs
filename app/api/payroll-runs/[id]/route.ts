@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
+import { recordAudit } from '@/lib/audit'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -42,6 +43,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const guard = await authorizeApi('payroll:manage')
     if (guard.error) return guard.error
+    const { session } = guard
 
     const { id } = await params
     const run = await prisma.payrollRun.findUnique({ where: { id } })
@@ -56,7 +58,15 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    await prisma.payrollRun.delete({ where: { id } })
+    await prisma.$transaction([
+      prisma.payrollRun.delete({ where: { id } }),
+      recordAudit(prisma, session, {
+        action: 'payroll.run_deleted',
+        entityType: 'PayrollRun',
+        entityId: id,
+        metadata: { periodId: run.payrollPeriodId },
+      }),
+    ])
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('DELETE /api/payroll-runs/[id] error:', error)

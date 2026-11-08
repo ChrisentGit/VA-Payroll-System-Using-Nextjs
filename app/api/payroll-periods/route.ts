@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
+import { recordAudit } from '@/lib/audit'
 import { getPayrollSettings } from '@/lib/payroll/settings'
 
 // GET /api/payroll-periods — list all periods with their runs
@@ -28,6 +29,7 @@ export async function POST(request: NextRequest) {
   try {
     const guard = await authorizeApi('payroll:manage')
     if (guard.error) return guard.error
+    const { session } = guard
 
     const body = await request.json()
     const { startDate, endDate } = body
@@ -67,8 +69,17 @@ export async function POST(request: NextRequest) {
 
     const { payFrequency } = await getPayrollSettings()
 
-    const period = await prisma.payrollPeriod.create({
-      data: { startDate: start, endDate: end, frequency: payFrequency },
+    const period = await prisma.$transaction(async (tx) => {
+      const created = await tx.payrollPeriod.create({
+        data: { startDate: start, endDate: end, frequency: payFrequency },
+      })
+      await recordAudit(tx, session, {
+        action: 'payroll.period_created',
+        entityType: 'PayrollPeriod',
+        entityId: created.id,
+        metadata: { startDate, endDate, frequency: payFrequency },
+      })
+      return created
     })
 
     return NextResponse.json(period, { status: 201 })

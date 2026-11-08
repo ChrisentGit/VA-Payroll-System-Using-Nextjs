@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
+import { recordAudit } from '@/lib/audit'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -34,15 +35,24 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     const guard = await authorizeApi('directory:write')
     if (guard.error) return guard.error
+    const { session } = guard
 
     const { id } = await params
     const body = await request.json()
     const { name, email, contactPerson, billingCurrency, status, notes } = body
 
-    const client = await prisma.client.update({
-      where: { id },
-      data: { name, email, contactPerson, billingCurrency, status, notes },
-    })
+    const [client] = await prisma.$transaction([
+      prisma.client.update({
+        where: { id },
+        data: { name, email, contactPerson, billingCurrency, status, notes },
+      }),
+      recordAudit(prisma, session, {
+        action: 'client.updated',
+        entityType: 'Client',
+        entityId: id,
+        metadata: { name, status },
+      }),
+    ])
 
     return NextResponse.json(client)
   } catch (error) {
@@ -67,6 +77,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const guard = await authorizeApi('directory:write')
     if (guard.error) return guard.error
+    const { session } = guard
 
     const { id } = await params
 
@@ -78,7 +89,14 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    await prisma.client.delete({ where: { id } })
+    await prisma.$transaction([
+      prisma.client.delete({ where: { id } }),
+      recordAudit(prisma, session, {
+        action: 'client.deleted',
+        entityType: 'Client',
+        entityId: id,
+      }),
+    ])
     return NextResponse.json({ success: true })
   } catch (error) {
     if (

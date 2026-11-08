@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
+import { recordAudit } from '@/lib/audit'
 import { findRateOn } from '@/lib/payroll/calculate'
 
 interface RouteParams {
@@ -13,6 +14,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const guard = await authorizeApi('directory:write')
     if (guard.error) return guard.error
+    const { session } = guard
 
     const { id } = await params
     const body = await request.json().catch(() => ({}))
@@ -52,14 +54,23 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    const milestone = await prisma.milestone.create({
-      data: {
-        engagementId: id,
-        title: 'Project completion',
-        amount: rate.amount,
-        currency: rate.currency,
-        completedAt,
-      },
+    const milestone = await prisma.$transaction(async (tx) => {
+      const created = await tx.milestone.create({
+        data: {
+          engagementId: id,
+          title: 'Project completion',
+          amount: rate.amount,
+          currency: rate.currency,
+          completedAt,
+        },
+      })
+      await recordAudit(tx, session, {
+        action: 'engagement.completed',
+        entityType: 'Engagement',
+        entityId: id,
+        metadata: { milestoneId: created.id, amount: rate.amount.toString(), currency: rate.currency },
+      })
+      return created
     })
 
     return NextResponse.json(milestone, { status: 201 })

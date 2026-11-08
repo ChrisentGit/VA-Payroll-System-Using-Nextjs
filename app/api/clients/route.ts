@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
+import { recordAudit } from '@/lib/audit'
 
 // GET /api/clients — list all clients
 export async function GET() {
@@ -26,6 +27,7 @@ export async function POST(request: NextRequest) {
   try {
     const guard = await authorizeApi('directory:write')
     if (guard.error) return guard.error
+    const { session } = guard
 
     const body = await request.json()
     const { name, email, contactPerson, billingCurrency, status, notes } = body
@@ -37,15 +39,24 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const client = await prisma.client.create({
-      data: {
-        name,
-        email: email || null,
-        contactPerson: contactPerson || null,
-        billingCurrency: billingCurrency || 'PHP',
-        status: status || 'ACTIVE',
-        notes: notes || null,
-      },
+    const client = await prisma.$transaction(async (tx) => {
+      const created = await tx.client.create({
+        data: {
+          name,
+          email: email || null,
+          contactPerson: contactPerson || null,
+          billingCurrency: billingCurrency || 'PHP',
+          status: status || 'ACTIVE',
+          notes: notes || null,
+        },
+      })
+      await recordAudit(tx, session, {
+        action: 'client.created',
+        entityType: 'Client',
+        entityId: created.id,
+        metadata: { name },
+      })
+      return created
     })
 
     return NextResponse.json(client, { status: 201 })

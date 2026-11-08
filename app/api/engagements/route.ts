@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
+import { recordAudit } from '@/lib/audit'
 
 // GET /api/engagements — list all engagements with related contractor/client/rates
 export async function GET() {
@@ -31,6 +32,7 @@ export async function POST(request: NextRequest) {
   try {
     const guard = await authorizeApi('directory:write')
     if (guard.error) return guard.error
+    const { session } = guard
 
     const body = await request.json()
     const {
@@ -59,27 +61,36 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const engagement = await prisma.engagement.create({
-      data: {
-        contractorId,
-        clientId,
-        title: title || null,
-        rateType,
-        retainerBasis: retainerBasis || undefined,
-        projectPayMode: projectPayMode || undefined,
-        status: status || 'active',
-        startDate: startDate ? new Date(startDate) : new Date(),
-        endDate: endDate ? new Date(endDate) : null,
-        rates: {
-          create: {
-            amount: rateAmount,
-            currency: rateCurrency || 'PHP',
-            effectiveFrom: new Date(rateEffectiveFrom),
-            notes: rateNotes || null,
+    const engagement = await prisma.$transaction(async (tx) => {
+      const created = await tx.engagement.create({
+        data: {
+          contractorId,
+          clientId,
+          title: title || null,
+          rateType,
+          retainerBasis: retainerBasis || undefined,
+          projectPayMode: projectPayMode || undefined,
+          status: status || 'active',
+          startDate: startDate ? new Date(startDate) : new Date(),
+          endDate: endDate ? new Date(endDate) : null,
+          rates: {
+            create: {
+              amount: rateAmount,
+              currency: rateCurrency || 'PHP',
+              effectiveFrom: new Date(rateEffectiveFrom),
+              notes: rateNotes || null,
+            },
           },
         },
-      },
-      include: { contractor: true, client: true, rates: true },
+        include: { contractor: true, client: true, rates: true },
+      })
+      await recordAudit(tx, session, {
+        action: 'engagement.created',
+        entityType: 'Engagement',
+        entityId: created.id,
+        metadata: { contractorId, clientId, rateType, rateAmount, rateCurrency: rateCurrency || 'PHP' },
+      })
+      return created
     })
 
     return NextResponse.json(engagement, { status: 201 })

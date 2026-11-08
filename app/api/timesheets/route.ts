@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
+import { recordAudit } from '@/lib/audit'
 
 // GET /api/timesheets — list all timesheets
 export async function GET() {
@@ -30,6 +31,7 @@ export async function POST(request: NextRequest) {
   try {
     const guard = await authorizeApi('timesheets:manage')
     if (guard.error) return guard.error
+    const { session } = guard
 
     const body = await request.json()
     const { engagementId, date, hours, description, status } = body
@@ -57,16 +59,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Engagement not found' }, { status: 404 })
     }
 
-    const timesheet = await prisma.timesheet.create({
-      data: {
-        engagementId,
-        contractorId: engagement.contractorId,
-        date: new Date(date),
-        hours: hours || null,
-        description: description || null,
-        status: status === 'DRAFT' ? 'DRAFT' : 'SUBMITTED',
-      },
-      include: { contractor: true, engagement: { include: { client: true } } },
+    const timesheet = await prisma.$transaction(async (tx) => {
+      const created = await tx.timesheet.create({
+        data: {
+          engagementId,
+          contractorId: engagement.contractorId,
+          date: new Date(date),
+          hours: hours || null,
+          description: description || null,
+          status: status === 'DRAFT' ? 'DRAFT' : 'SUBMITTED',
+        },
+        include: { contractor: true, engagement: { include: { client: true } } },
+      })
+      await recordAudit(tx, session, {
+        action: 'timesheet.created',
+        entityType: 'Timesheet',
+        entityId: created.id,
+        metadata: { engagementId, date, hours: hours || null },
+      })
+      return created
     })
 
     return NextResponse.json(timesheet, { status: 201 })

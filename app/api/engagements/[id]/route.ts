@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
+import { recordAudit } from '@/lib/audit'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -41,6 +42,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     const guard = await authorizeApi('directory:write')
     if (guard.error) return guard.error
+    const { session } = guard
 
     const { id } = await params
     const body = await request.json()
@@ -56,21 +58,29 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       endDate,
     } = body
 
-    const engagement = await prisma.engagement.update({
-      where: { id },
-      data: {
-        contractorId,
-        clientId,
-        title,
-        rateType,
-        retainerBasis,
-        projectPayMode,
-        status,
-        startDate: startDate ? new Date(startDate) : undefined,
-        endDate: endDate ? new Date(endDate) : null,
-      },
-      include: { contractor: true, client: true, rates: true },
-    })
+    const [engagement] = await prisma.$transaction([
+      prisma.engagement.update({
+        where: { id },
+        data: {
+          contractorId,
+          clientId,
+          title,
+          rateType,
+          retainerBasis,
+          projectPayMode,
+          status,
+          startDate: startDate ? new Date(startDate) : undefined,
+          endDate: endDate ? new Date(endDate) : null,
+        },
+        include: { contractor: true, client: true, rates: true },
+      }),
+      recordAudit(prisma, session, {
+        action: 'engagement.updated',
+        entityType: 'Engagement',
+        entityId: id,
+        metadata: { rateType, retainerBasis, projectPayMode, status },
+      }),
+    ])
 
     return NextResponse.json(engagement)
   } catch (error) {
@@ -95,6 +105,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const guard = await authorizeApi('directory:write')
     if (guard.error) return guard.error
+    const { session } = guard
 
     const { id } = await params
 
@@ -106,7 +117,14 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    await prisma.engagement.delete({ where: { id } })
+    await prisma.$transaction([
+      prisma.engagement.delete({ where: { id } }),
+      recordAudit(prisma, session, {
+        action: 'engagement.deleted',
+        entityType: 'Engagement',
+        entityId: id,
+      }),
+    ])
     return NextResponse.json({ success: true })
   } catch (error) {
     if (

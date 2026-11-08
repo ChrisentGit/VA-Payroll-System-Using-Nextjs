@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
+import { recordAudit } from '@/lib/audit'
 import { getPayrollSettings } from '@/lib/payroll/settings'
 
 const FREQUENCIES = ['MONTHLY', 'SEMI_MONTHLY'] as const
@@ -23,6 +24,7 @@ export async function PATCH(request: NextRequest) {
   try {
     const guard = await authorizeApi('payroll:manage')
     if (guard.error) return guard.error
+    const { session } = guard
 
     const { payFrequency } = await request.json()
 
@@ -30,11 +32,19 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid pay frequency' }, { status: 400 })
     }
 
-    const settings = await prisma.payrollSettings.upsert({
-      where: { id: 'default' },
-      update: { payFrequency },
-      create: { id: 'default', payFrequency },
-    })
+    const [settings] = await prisma.$transaction([
+      prisma.payrollSettings.upsert({
+        where: { id: 'default' },
+        update: { payFrequency },
+        create: { id: 'default', payFrequency },
+      }),
+      recordAudit(prisma, session, {
+        action: 'settings.payroll_updated',
+        entityType: 'PayrollSettings',
+        entityId: 'default',
+        metadata: { payFrequency },
+      }),
+    ])
 
     return NextResponse.json(settings)
   } catch (error) {
