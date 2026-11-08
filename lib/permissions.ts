@@ -8,6 +8,9 @@ const PERMISSIONS = {
   'contractors:sensitive': ['SUPER_ADMIN', 'FINANCE_OFFICER'],
   'timesheets:manage': ['SUPER_ADMIN', 'FINANCE_OFFICER', 'CLIENT_MANAGER'],
   'payroll:manage': ['SUPER_ADMIN', 'FINANCE_OFFICER'],
+  'users:manage': ['SUPER_ADMIN'],
+  'audit:read': ['SUPER_ADMIN'],
+  'portal:access': ['CONTRACTOR'],
 } as const
 
 export type Permission = keyof typeof PERMISSIONS

@@ -71,6 +71,8 @@ model User {
   email        String      @unique
   passwordHash String
   role         Role        @default(FINANCE_OFFICER)
+  // Inactive users are locked out, but stay on record for the audit history
+  isActive     Boolean     @default(true)
   contractor   Contractor?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
@@ -238,5 +240,27 @@ model PayrollLineItem {
   // Unique, so the database itself refuses to pay a milestone twice
   milestoneId    String?     @unique
   milestone      Milestone?  @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  paidAt           DateTime?
+  paidBy           String?
+  paymentReference String?
+  // Masked label of the account paid, so later bank changes leave payslips alone
+  paidTo           String?
   createdAt      DateTime    @default(now())
+}
+
+// Append-only: nothing in the app updates or deletes these rows.
+// Actor fields are plain text so the history outlives the user. Never store
+// tax IDs, account numbers, or passwords in metadata.
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String
+  actorEmail String
+  action     String
+  entityType String
+  entityId   String
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
 }

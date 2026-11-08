@@ -13,11 +13,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       authorize: async (credentials) => {
         if (!credentials?.email || !credentials?.password) return null;
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email as string },
+        const user = await prisma.user.findFirst({
+          where: {
+            email: { equals: (credentials.email as string).trim(), mode: "insensitive" },
+          },
         });
 
-        if (!user) return null;
+        if (!user || !user.isActive) return null;
 
         const isValid = await bcrypt.compare(
           credentials.password as string,
@@ -36,12 +38,34 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
-    jwt({ token, user }) {
-      if (user) token.role = user.role;
+    // Re-reads the user on every request, so a role change or deactivation
+    // takes effect immediately instead of when the token expires.
+    // Returning null ends the session.
+    async jwt({ token, user }) {
+      if (user) {
+        token.role = user.role;
+        return token;
+      }
+
+      if (!token.sub) return null;
+
+      const current = await prisma.user.findUnique({
+        where: { id: token.sub },
+        select: { role: true, isActive: true, name: true, email: true },
+      });
+
+      if (!current?.isActive) return null;
+
+      token.role = current.role;
+      token.name = current.name;
+      token.email = current.email;
       return token;
     },
     session({ session, token }) {
-      if (session.user) session.user.role = token.role as string;
+      if (session.user) {
+        session.user.id = token.sub as string;
+        session.user.role = token.role as string;
+      }
       return session;
     },
   },

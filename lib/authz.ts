@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 import { redirect } from 'next/navigation'
 import type { Session } from 'next-auth'
+import type { Contractor } from '@prisma/client'
 import { auth } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
 import { can, type Permission } from '@/lib/permissions'
 
 type ApiGuard =
@@ -40,4 +42,45 @@ export async function requirePagePermission(permission: Permission): Promise<Ses
   if (!can(session.user.role, permission)) redirect('/dashboard')
 
   return session
+}
+
+type PortalContractor = Omit<Contractor, 'taxId'>
+
+type PortalGuard =
+  | { session: Session; contractor: PortalContractor; error: null }
+  | { session: null; contractor: null; error: NextResponse }
+
+// Portal handlers take the contractor from the session, never from the request,
+// so one contractor cannot reach another's records by changing an id.
+export async function authorizePortalApi(): Promise<PortalGuard> {
+  const guard = await authorizeApi('portal:access')
+  if (guard.error) return { session: null, contractor: null, error: guard.error }
+
+  const contractor = await prisma.contractor.findUnique({
+    where: { userId: guard.session.user.id },
+  })
+
+  if (!contractor) {
+    return {
+      session: null,
+      contractor: null,
+      error: NextResponse.json(
+        { error: 'This login is not linked to a contractor profile' },
+        { status: 403 }
+      ),
+    }
+  }
+
+  return { session: guard.session, contractor, error: null }
+}
+
+export async function requirePortalContractor() {
+  const session = await requirePagePermission('portal:access')
+  const contractor = await prisma.contractor.findUnique({
+    where: { userId: session.user.id },
+  })
+
+  if (!contractor) redirect('/portal/not-linked')
+
+  return { session, contractor }
 }
