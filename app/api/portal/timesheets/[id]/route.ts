@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizePortalApi } from '@/lib/authz'
 import { recordAudit } from '@/lib/audit'
+import { clientErrorResponse, optionalDate, optionalHours, optionalText, readBody } from '@/lib/validation'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -9,8 +10,18 @@ interface RouteParams {
 
 // Looks up by id and owner together, so another contractor's entry is a 404.
 // Approved or payroll-linked entries need a manager to reopen them.
-async function findEditable(id: string, contractorId: string) {
-  const timesheet = await prisma.timesheet.findFirst({ where: { id, contractorId } })
+async function findEditable(id: string, contractor: { id: string; status: string }) {
+  if (contractor.status === 'OFFBOARDED') {
+    return {
+      timesheet: null,
+      problem: NextResponse.json(
+        { error: 'Offboarded contractors cannot change timesheets' },
+        { status: 403 }
+      ),
+    }
+  }
+
+  const timesheet = await prisma.timesheet.findFirst({ where: { id, contractorId: contractor.id } })
 
   if (!timesheet) {
     return {
@@ -39,28 +50,20 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const { session, contractor } = guard
 
     const { id } = await params
-    const { timesheet, problem } = await findEditable(id, contractor.id)
+    const { timesheet, problem } = await findEditable(id, contractor)
     if (problem) return problem
 
-    const { date, hours, description } = await request.json()
-    const parsedDate = date ? new Date(date) : undefined
-
-    if (parsedDate && Number.isNaN(parsedDate.getTime())) {
-      return NextResponse.json({ error: 'Invalid date' }, { status: 400 })
-    }
-
-    const parsedHours = hours === '' || hours === undefined ? null : hours
-
-    if (parsedHours !== null && !(Number(parsedHours) > 0 && Number(parsedHours) <= 24)) {
-      return NextResponse.json({ error: 'Hours must be between 0 and 24' }, { status: 400 })
-    }
+    const body = await readBody(request)
+    const date = optionalDate(body.date, 'date') ?? undefined
+    const hours = optionalHours(body.hours)
+    const description = optionalText(body.description, 'description')
 
     const [updated] = await prisma.$transaction([
       prisma.timesheet.update({
         where: { id },
         data: {
-          date: parsedDate,
-          hours: parsedHours,
+          date,
+          hours,
           description,
           ...(timesheet.status === 'REJECTED' && {
             status: 'SUBMITTED',
@@ -74,12 +77,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         action: 'timesheet.updated',
         entityType: 'Timesheet',
         entityId: id,
-        metadata: { date, hours: parsedHours, via: 'portal' },
+        metadata: { date: date?.toISOString(), hours, via: 'portal' },
       }),
     ])
 
     return NextResponse.json(updated)
   } catch (error) {
+    const invalid = clientErrorResponse(error)
+    if (invalid) return invalid
     if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
       return NextResponse.json(
         { error: 'You already have a timesheet for this engagement on this date' },
@@ -99,7 +104,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const { session, contractor } = guard
 
     const { id } = await params
-    const { problem } = await findEditable(id, contractor.id)
+    const { problem } = await findEditable(id, contractor)
     if (problem) return problem
 
     await prisma.$transaction([
