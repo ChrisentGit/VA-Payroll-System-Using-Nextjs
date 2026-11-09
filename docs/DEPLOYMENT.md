@@ -10,12 +10,16 @@ Create a PostgreSQL database and copy its connection string. Most hosted provide
 
 Generate these once per environment and store them in a password manager.
 
+These commands work in both bash and PowerShell.
+
 ```bash
-npx auth secret                # AUTH_SECRET
-openssl rand -base64 32        # ENCRYPTION_KEY
+npx auth secret
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
-If `ENCRYPTION_KEY` is lost, saved tax IDs and account numbers cannot be recovered. Changing it makes existing values unreadable.
+The first prints `AUTH_SECRET`, and the second prints `ENCRYPTION_KEY`.
+
+If `ENCRYPTION_KEY` is lost, saved tax IDs and account numbers cannot be recovered. To replace it, follow "Rotating the encryption key" below, because simply changing it makes existing values unreadable.
 
 ## 3. Set environment variables on the host
 
@@ -30,9 +34,21 @@ If `ENCRYPTION_KEY` is lost, saved tax IDs and account numbers cannot be recover
 
 Run these from your machine against the production database. Migrations are a separate step so that a build can never change the database by accident.
 
+In bash:
+
 ```bash
 DATABASE_URL="<production url>" npx prisma migrate deploy
 DATABASE_URL="<production url>" SEED_ADMIN_EMAIL="you@example.com" SEED_ADMIN_PASSWORD="<strong password>" npx prisma db seed
+```
+
+In PowerShell, set the variables first. They last until you close the window.
+
+```powershell
+$env:DATABASE_URL = "<production url>"
+$env:SEED_ADMIN_EMAIL = "you@example.com"
+$env:SEED_ADMIN_PASSWORD = "<strong password>"
+npx prisma migrate deploy
+npx prisma db seed
 ```
 
 Run `npx prisma migrate deploy` again whenever a release adds a migration, before that release goes live.
@@ -45,12 +61,47 @@ Import the repository into Vercel. The default Next.js build works, and `postins
 
 1. Sign in as the admin and change the password under My Account.
 2. Add a contractor with a tax ID, and confirm the database column starts with `enc:v1:`.
-3. Create a test login under Users and confirm it can sign in.
+3. Create a test login under Users, sign in with it, and confirm it is sent to change its temporary password.
 
 ## Upgrading a database that already has data
 
 After deploying the release that adds encryption, convert existing tax IDs and account numbers. It is safe to run more than once.
 
+In bash:
+
 ```bash
 DATABASE_URL="<production url>" ENCRYPTION_KEY="<key>" npx tsx scripts/encrypt-existing.ts
 ```
+
+In PowerShell:
+
+```powershell
+$env:DATABASE_URL = "<production url>"
+$env:ENCRYPTION_KEY = "<key>"
+npx tsx scripts/encrypt-existing.ts
+```
+
+## Rotating the encryption key
+
+Do this if the key may have been exposed, or on whatever schedule you choose. The app keeps working throughout, because it can read values under either key.
+
+1. Generate a new key with the command in step 2.
+2. On the host, set `ENCRYPTION_KEY` to the new key and `ENCRYPTION_KEY_PREVIOUS` to the old one, then redeploy.
+3. From your machine, re-encrypt the saved values. It is safe to run more than once, and any failure leaves the database unchanged.
+
+   In bash:
+
+   ```bash
+   DATABASE_URL="<production url>" ENCRYPTION_KEY="<new key>" ENCRYPTION_KEY_PREVIOUS="<old key>" npx tsx scripts/rotate-encryption-key.ts
+   ```
+
+   In PowerShell:
+
+   ```powershell
+   $env:DATABASE_URL = "<production url>"
+   $env:ENCRYPTION_KEY = "<new key>"
+   $env:ENCRYPTION_KEY_PREVIOUS = "<old key>"
+   npx tsx scripts/rotate-encryption-key.ts
+   ```
+
+4. Remove `ENCRYPTION_KEY_PREVIOUS` from the host and redeploy.

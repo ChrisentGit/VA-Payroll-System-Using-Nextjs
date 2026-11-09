@@ -4,14 +4,25 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 // Stored as enc:v1:<iv>:<auth tag>:<ciphertext>, all base64.
 const PREFIX = 'enc:v1:'
 
+function parseKey(name: string, raw: string): Buffer {
+  const key = Buffer.from(raw, 'base64')
+  if (key.length !== 32) throw new Error(`${name} must be 32 bytes, base64 encoded`)
+
+  return key
+}
+
 function getKey(): Buffer {
   const raw = process.env.ENCRYPTION_KEY
   if (!raw) throw new Error('ENCRYPTION_KEY is not set')
 
-  const key = Buffer.from(raw, 'base64')
-  if (key.length !== 32) throw new Error('ENCRYPTION_KEY must be 32 bytes, base64 encoded')
+  return parseKey('ENCRYPTION_KEY', raw)
+}
 
-  return key
+// Only set while rotating keys. See docs/DEPLOYMENT.md.
+function getPreviousKey(): Buffer | null {
+  const raw = process.env.ENCRYPTION_KEY_PREVIOUS
+
+  return raw ? parseKey('ENCRYPTION_KEY_PREVIOUS', raw) : null
 }
 
 export function isEncrypted(value: string): boolean {
@@ -31,12 +42,32 @@ export function encrypt(plaintext: string): string {
 export function decrypt(stored: string): string {
   if (!isEncrypted(stored)) return stored
 
+  const previous = getPreviousKey()
+
+  try {
+    return decryptWith(getKey(), stored)
+  } catch (error) {
+    if (!previous) throw error
+    return decryptWith(previous, stored)
+  }
+}
+
+export function usesCurrentKey(stored: string): boolean {
+  try {
+    decryptWith(getKey(), stored)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function decryptWith(key: Buffer, stored: string): string {
   const [iv, tag, ciphertext] = stored
     .slice(PREFIX.length)
     .split(':')
     .map((part) => Buffer.from(part, 'base64'))
 
-  const decipher = createDecipheriv('aes-256-gcm', getKey(), iv)
+  const decipher = createDecipheriv('aes-256-gcm', key, iv)
   decipher.setAuthTag(tag)
 
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8')

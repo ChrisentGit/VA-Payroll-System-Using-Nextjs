@@ -1,10 +1,32 @@
 import { randomBytes } from 'node:crypto'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { decrypt, encrypt, encryptIfPresent, isEncrypted } from './crypto'
+import { decrypt, encrypt, encryptIfPresent, isEncrypted, usesCurrentKey } from './crypto'
 
 describe('crypto', () => {
   beforeEach(() => {
     process.env.ENCRYPTION_KEY = randomBytes(32).toString('base64')
+    delete process.env.ENCRYPTION_KEY_PREVIOUS
+  })
+
+  it('reads values saved under the previous key while rotating', () => {
+    const oldKey = process.env.ENCRYPTION_KEY as string
+    const stored = encrypt('1234567890')
+
+    process.env.ENCRYPTION_KEY = randomBytes(32).toString('base64')
+    process.env.ENCRYPTION_KEY_PREVIOUS = oldKey
+
+    expect(usesCurrentKey(stored)).toBe(false)
+    expect(decrypt(stored)).toBe('1234567890')
+    expect(usesCurrentKey(encrypt('1234567890'))).toBe(true)
+  })
+
+  it('still refuses a value neither key can open', () => {
+    const stored = encrypt('1234567890')
+
+    process.env.ENCRYPTION_KEY = randomBytes(32).toString('base64')
+    process.env.ENCRYPTION_KEY_PREVIOUS = randomBytes(32).toString('base64')
+
+    expect(() => decrypt(stored)).toThrow()
   })
 
   it('round-trips text, including non-ASCII', () => {
