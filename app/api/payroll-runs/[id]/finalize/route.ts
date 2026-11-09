@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
 import { recordAudit } from '@/lib/audit'
+import { PayrollError } from '@/lib/payroll/generate'
+import { lockDraftRun } from '@/lib/payroll/locks'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -15,59 +17,45 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const { session } = guard
 
     const { id } = await params
-    const run = await prisma.payrollRun.findUnique({
-      where: { id },
-      include: { lineItems: true },
-    })
 
-    if (!run) {
-      return NextResponse.json({ error: 'Payroll run not found' }, { status: 404 })
-    }
-    if (run.status === 'FINALIZED') {
-      return NextResponse.json(
-        { error: 'This payroll run is already finalized' },
-        { status: 409 }
-      )
-    }
-    if (run.lineItems.length === 0) {
-      return NextResponse.json(
-        { error: 'This payroll run has nothing to pay' },
-        { status: 400 }
-      )
-    }
+    await prisma.$transaction(async (tx) => {
+      const run = await lockDraftRun(tx, id, 'This payroll run is already finalized')
 
-    const missing = [
-      ...new Set(
-        run.lineItems.filter((li) => li.totalAmountPhp === null).map((li) => li.currency)
-      ),
-    ]
+      if (run.lineItems.length === 0) {
+        throw new PayrollError('This payroll run has nothing to pay')
+      }
 
-    if (missing.length > 0) {
-      return NextResponse.json(
-        { error: `Enter an exchange rate to PHP for: ${missing.join(', ')}` },
-        { status: 400 }
-      )
-    }
+      const missing = [
+        ...new Set(
+          run.lineItems.filter((li) => li.totalAmountPhp === null).map((li) => li.currency)
+        ),
+      ]
 
-    await prisma.$transaction([
-      prisma.payrollRun.update({
+      if (missing.length > 0) {
+        throw new PayrollError(`Enter an exchange rate to PHP for: ${missing.join(', ')}`)
+      }
+
+      await tx.payrollRun.update({
         where: { id },
         data: { status: 'FINALIZED', finalizedAt: new Date() },
-      }),
-      prisma.payrollPeriod.update({
+      })
+      await tx.payrollPeriod.update({
         where: { id: run.payrollPeriodId },
         data: { status: 'closed' },
-      }),
-      recordAudit(prisma, session, {
+      })
+      await recordAudit(tx, session, {
         action: 'payroll.run_finalized',
         entityType: 'PayrollRun',
         entityId: id,
         metadata: { lineItems: run.lineItems.length },
-      }),
-    ])
+      })
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {
+    if (error instanceof PayrollError) {
+      return NextResponse.json({ error: error.message }, { status: error.status })
+    }
     console.error('POST /api/payroll-runs/[id]/finalize error:', error)
     return NextResponse.json(
       { error: 'Failed to finalize payroll run' },

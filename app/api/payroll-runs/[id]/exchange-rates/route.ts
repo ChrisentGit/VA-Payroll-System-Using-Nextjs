@@ -3,7 +3,10 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
 import { recordAudit } from '@/lib/audit'
+import { clientErrorResponse, readBody } from '@/lib/validation'
 import { convertToPhp } from '@/lib/payroll/calculate'
+import { PayrollError } from '@/lib/payroll/generate'
+import { lockDraftRun } from '@/lib/payroll/locks'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -18,25 +21,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const { session } = guard
 
     const { id } = await params
-    const { rates } = await request.json()
+    const { rates } = await readBody(request)
 
     if (!rates || typeof rates !== 'object') {
       return NextResponse.json({ error: 'rates is required' }, { status: 400 })
-    }
-
-    const run = await prisma.payrollRun.findUnique({
-      where: { id },
-      include: { lineItems: true },
-    })
-
-    if (!run) {
-      return NextResponse.json({ error: 'Payroll run not found' }, { status: 404 })
-    }
-    if (run.status !== 'DRAFT') {
-      return NextResponse.json(
-        { error: 'Exchange rates are locked once a run is finalized' },
-        { status: 409 }
-      )
     }
 
     const parsed = new Map<string, Prisma.Decimal>()
@@ -50,38 +38,46 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       } catch {
         return NextResponse.json({ error: `Invalid rate for ${currency}` }, { status: 400 })
       }
-      if (!rate.isFinite() || rate.lte(0)) {
+      if (!rate.isFinite() || rate.lte(0) || rate.gte(1_000_000)) {
         return NextResponse.json(
-          { error: `The rate for ${currency} must be greater than zero` },
+          { error: `The rate for ${currency} must be between 0 and 1,000,000` },
           { status: 400 }
         )
       }
       parsed.set(currency, rate)
     }
 
-    await prisma.$transaction([
-      ...run.lineItems
-        .filter((li) => parsed.has(li.currency))
-        .map((li) => {
-          const rate = parsed.get(li.currency) as Prisma.Decimal
-          return prisma.payrollLineItem.update({
-            where: { id: li.id },
-            data: {
-              exchangeRate: rate,
-              totalAmountPhp: convertToPhp(li.totalAmount, rate),
-            },
-          })
-        }),
-      recordAudit(prisma, session, {
+    await prisma.$transaction(async (tx) => {
+      const run = await lockDraftRun(tx, id, 'Exchange rates are locked once a run is finalized')
+
+      for (const li of run.lineItems) {
+        const rate = parsed.get(li.currency)
+        if (!rate) continue
+
+        await tx.payrollLineItem.update({
+          where: { id: li.id },
+          data: {
+            exchangeRate: rate,
+            totalAmountPhp: convertToPhp(li.totalAmount, rate),
+          },
+        })
+      }
+
+      await recordAudit(tx, session, {
         action: 'payroll.exchange_rates_set',
         entityType: 'PayrollRun',
         entityId: id,
         metadata: Object.fromEntries([...parsed].map(([c, r]) => [c, r.toString()])),
-      }),
-    ])
+      })
+    }, { timeout: 30_000 })
 
     return NextResponse.json({ success: true })
   } catch (error) {
+    const invalid = clientErrorResponse(error)
+    if (invalid) return invalid
+    if (error instanceof PayrollError) {
+      return NextResponse.json({ error: error.message }, { status: error.status })
+    }
     console.error('PATCH /api/payroll-runs/[id]/exchange-rates error:', error)
     return NextResponse.json(
       { error: 'Failed to save exchange rates' },
