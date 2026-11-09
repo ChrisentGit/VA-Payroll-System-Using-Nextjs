@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
 import { recordAudit } from '@/lib/audit'
+import { clientErrorResponse, optionalText, readBody, requiredText } from '@/lib/validation'
 import {
   BCRYPT_ROUNDS,
   ContractorAlreadyLinkedError,
@@ -19,10 +20,14 @@ export async function POST(request: NextRequest) {
     if (guard.error) return guard.error
     const { session } = guard
 
-    const { name, email, role, password, contractorId } = await request.json()
+    const body = await readBody(request)
+    const name = requiredText(body.name, 'name', 200)
+    const email = requiredText(body.email, 'email', 254)
+    const contractorId = optionalText(body.contractorId, 'contractorId')
+    const { role, password } = body
 
-    if (!name || !email || !isRole(role)) {
-      return NextResponse.json({ error: 'name, email and a valid role are required' }, { status: 400 })
+    if (!isRole(role)) {
+      return NextResponse.json({ error: 'A valid role is required' }, { status: 400 })
     }
 
     const problem = passwordProblem(password)
@@ -35,15 +40,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS)
+    const passwordHash = await bcrypt.hash(password as string, BCRYPT_ROUNDS)
 
     const user = await prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
-        data: { name, email: normalizeEmail(email), role, passwordHash },
+        data: { name, email: normalizeEmail(email), role, passwordHash, mustChangePassword: true },
         select: { id: true, name: true, email: true, role: true, isActive: true },
       })
 
-      if (role === 'CONTRACTOR') await linkContractor(tx, created.id, contractorId)
+      if (role === 'CONTRACTOR') await linkContractor(tx, created.id, contractorId ?? null)
 
       await recordAudit(tx, session, {
         action: 'user.created',
@@ -57,6 +62,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(user, { status: 201 })
   } catch (error) {
+    const invalid = clientErrorResponse(error)
+    if (invalid) return invalid
     if (error instanceof ContractorAlreadyLinkedError) {
       return NextResponse.json(
         { error: 'That contractor already has a login' },

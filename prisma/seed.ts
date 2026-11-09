@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
+import { BCRYPT_ROUNDS } from "../lib/users";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
@@ -13,7 +14,7 @@ async function main() {
     throw new Error("Set SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD in .env before seeding");
   }
 
-  const passwordHash = await bcrypt.hash(password, 10);
+  const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
   const admin = await prisma.user.upsert({
     where: { email },

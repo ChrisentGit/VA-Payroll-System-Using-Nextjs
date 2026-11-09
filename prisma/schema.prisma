@@ -73,6 +73,10 @@ model User {
   role         Role        @default(FINANCE_OFFICER)
   // Inactive users are locked out, but stay on record for the audit history
   isActive     Boolean     @default(true)
+  // Raised when the password changes, which ends every older session
+  sessionVersion Int       @default(0)
+  // Set when an admin chooses the password, cleared when the user picks their own
+  mustChangePassword Boolean @default(false)
   contractor   Contractor?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
@@ -220,32 +224,32 @@ model PayrollRun {
 }
 
 model PayrollLineItem {
-  id             String      @id @default(cuid())
-  payrollRunId   String
-  payrollRun     PayrollRun  @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
-  engagementId   String
-  engagement     Engagement  @relation(fields: [engagementId], references: [id])
-  contractorId   String
-  contractor     Contractor  @relation(fields: [contractorId], references: [id])
-  rateType       RateType
-  hours          Decimal?    @db.Decimal(6, 2)
-  rateAmount     Decimal     @db.Decimal(10, 2)
-  currency       Currency    @default(PHP)
-  totalAmount    Decimal     @db.Decimal(12, 2)
+  id               String      @id @default(cuid())
+  payrollRunId     String
+  payrollRun       PayrollRun  @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  engagementId     String
+  engagement       Engagement  @relation(fields: [engagementId], references: [id])
+  contractorId     String
+  contractor       Contractor  @relation(fields: [contractorId], references: [id])
+  rateType         RateType
+  hours            Decimal?    @db.Decimal(6, 2)
+  rateAmount       Decimal     @db.Decimal(10, 2)
+  currency         Currency    @default(PHP)
+  totalAmount      Decimal     @db.Decimal(12, 2)
   // PHP per 1 unit of currency. Saved on the item so finalized runs never change.
-  exchangeRate   Decimal?    @db.Decimal(12, 6)
-  totalAmountPhp Decimal?    @db.Decimal(14, 2)
-  notes          String?
-  timesheets     Timesheet[]
+  exchangeRate     Decimal?    @db.Decimal(12, 6)
+  totalAmountPhp   Decimal?    @db.Decimal(14, 2)
+  notes            String?
+  timesheets       Timesheet[]
   // Unique, so the database itself refuses to pay a milestone twice
-  milestoneId    String?     @unique
-  milestone      Milestone?  @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  milestoneId      String?     @unique
+  milestone        Milestone?  @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
   paidAt           DateTime?
   paidBy           String?
   paymentReference String?
   // Masked label of the account paid, so later bank changes leave payslips alone
   paidTo           String?
-  createdAt      DateTime    @default(now())
+  createdAt        DateTime    @default(now())
 }
 
 // Append-only: nothing in the app updates or deletes these rows.
@@ -263,4 +267,14 @@ model AuditLog {
 
   @@index([createdAt])
   @@index([entityType, entityId])
+}
+
+// Counts sign-in attempts per email and per IP address. Separate from AuditLog
+// so one atomic upsert can count attempts that arrive at the same moment.
+model LoginThrottle {
+  key         String   @id
+  attempts    Int      @default(0)
+  windowStart DateTime @default(now())
+
+  @@index([windowStart])
 }

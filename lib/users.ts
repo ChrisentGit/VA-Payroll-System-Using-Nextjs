@@ -9,6 +9,10 @@ export function isRole(value: unknown): value is RoleName {
 
 export const BCRYPT_ROUNDS = 12
 
+// Compared against when no account matches, so a login for an unknown email
+// takes as long as one for a real account. Matches no password anyone can type.
+export const NO_SUCH_USER_HASH = '$2b$12$AcOA1qJyLtotIgu4WYUF0OKDZD7ATOc7hYlfCIJLbwIZrGSsEZJlG'
+
 // bcrypt ignores everything past 72 bytes, so longer passwords are refused
 // rather than silently cut short.
 export function passwordProblem(password: unknown): string | null {
@@ -26,6 +30,7 @@ export function normalizeEmail(email: string): string {
 }
 
 export class ContractorAlreadyLinkedError extends Error {}
+export class LastAdminError extends Error {}
 
 type Tx = Pick<typeof prisma, 'contractor'>
 

@@ -28,7 +28,9 @@ export default function LoginPage() {
 
     setLoading(false);
 
-    if (result?.error) {
+    if (result?.code === "too_many_attempts") {
+      setError("Too many attempts. Please wait 15 minutes and try again.");
+    } else if (result?.error) {
       setError("Invalid email or password.");
     } else {
       router.push("/dashboard");

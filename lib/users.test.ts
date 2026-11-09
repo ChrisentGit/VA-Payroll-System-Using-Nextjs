@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { isRole, normalizeEmail, passwordProblem } from './users'
+import bcrypt from 'bcryptjs'
+import { BCRYPT_ROUNDS, NO_SUCH_USER_HASH, isRole, normalizeEmail, passwordProblem } from './users'
+
+describe('NO_SUCH_USER_HASH', () => {
+  it('costs the same as a real password check, so timing reveals nothing', () => {
+    expect(bcrypt.getRounds(NO_SUCH_USER_HASH)).toBe(BCRYPT_ROUNDS)
+  })
+})
 
 describe('passwordProblem', () => {
   it('accepts a 12 character password', () => {
