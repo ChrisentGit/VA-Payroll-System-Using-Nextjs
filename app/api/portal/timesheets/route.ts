@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizePortalApi } from '@/lib/authz'
 import { recordAudit } from '@/lib/audit'
+import { clientErrorResponse, optionalHours, optionalText, readBody, requiredDate, requiredText } from '@/lib/validation'
 
 // GET /api/portal/timesheets — the signed-in contractor's own entries
 export async function GET() {
@@ -36,15 +37,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { engagementId, date, hours, description } = await request.json()
-    const parsedDate = new Date(date)
-
-    if (!engagementId || !date || Number.isNaN(parsedDate.getTime())) {
-      return NextResponse.json({ error: 'An engagement and a valid date are required' }, { status: 400 })
-    }
-    if (hours && !(Number(hours) > 0 && Number(hours) <= 24)) {
-      return NextResponse.json({ error: 'Hours must be between 0 and 24' }, { status: 400 })
-    }
+    const body = await readBody(request)
+    const engagementId = requiredText(body.engagementId, 'engagementId')
+    const date = requiredDate(body.date, 'date')
+    const hours = optionalHours(body.hours) ?? null
+    const description = optionalText(body.description, 'description')
 
     // Filtering on the contractor makes someone else's engagement look like it does not exist
     const engagement = await prisma.engagement.findFirst({
@@ -61,9 +58,9 @@ export async function POST(request: NextRequest) {
         data: {
           engagementId,
           contractorId: contractor.id,
-          date: parsedDate,
-          hours: hours || null,
-          description: description || null,
+          date,
+          hours,
+          description,
           status: 'SUBMITTED',
         },
       })
@@ -71,13 +68,15 @@ export async function POST(request: NextRequest) {
         action: 'timesheet.created',
         entityType: 'Timesheet',
         entityId: created.id,
-        metadata: { engagementId, date, hours: hours || null, via: 'portal' },
+        metadata: { engagementId, date: date.toISOString(), hours, via: 'portal' },
       })
       return created
     })
 
     return NextResponse.json(timesheet, { status: 201 })
   } catch (error) {
+    const invalid = clientErrorResponse(error)
+    if (invalid) return invalid
     if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
       return NextResponse.json(
         { error: 'You already have a timesheet for this engagement on this date' },

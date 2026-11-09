@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
 import { recordAudit } from '@/lib/audit'
+import { clientErrorResponse, readBody, requiredDate } from '@/lib/validation'
 import { getPayrollSettings } from '@/lib/payroll/settings'
 
 // GET /api/payroll-periods — list all periods with their runs
@@ -31,22 +32,10 @@ export async function POST(request: NextRequest) {
     if (guard.error) return guard.error
     const { session } = guard
 
-    const body = await request.json()
-    const { startDate, endDate } = body
+    const body = await readBody(request)
+    const start = requiredDate(body.startDate, 'startDate')
+    const end = requiredDate(body.endDate, 'endDate')
 
-    if (!startDate || !endDate) {
-      return NextResponse.json(
-        { error: 'startDate and endDate are required' },
-        { status: 400 }
-      )
-    }
-
-    const start = new Date(startDate)
-    const end = new Date(endDate)
-
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-      return NextResponse.json({ error: 'Invalid date' }, { status: 400 })
-    }
     if (end < start) {
       return NextResponse.json(
         { error: 'End date must be on or after the start date' },
@@ -77,13 +66,19 @@ export async function POST(request: NextRequest) {
         action: 'payroll.period_created',
         entityType: 'PayrollPeriod',
         entityId: created.id,
-        metadata: { startDate, endDate, frequency: payFrequency },
+        metadata: {
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+          frequency: payFrequency,
+        },
       })
       return created
     })
 
     return NextResponse.json(period, { status: 201 })
   } catch (error) {
+    const invalid = clientErrorResponse(error)
+    if (invalid) return invalid
     console.error('POST /api/payroll-periods error:', error)
     return NextResponse.json(
       { error: 'Failed to create payroll period' },

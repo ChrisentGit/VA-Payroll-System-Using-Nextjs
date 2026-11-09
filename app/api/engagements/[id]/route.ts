@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
 import { recordAudit } from '@/lib/audit'
+import { ENGAGEMENT_STATUSES, PROJECT_PAY_MODES, RATE_TYPES, RETAINER_BASES, clientErrorResponse, enumValue, optionalDate, optionalText, readBody, textIfSent } from '@/lib/validation'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -45,18 +46,16 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const { session } = guard
 
     const { id } = await params
-    const body = await request.json()
-    const {
-      contractorId,
-      clientId,
-      title,
-      rateType,
-      retainerBasis,
-      projectPayMode,
-      status,
-      startDate,
-      endDate,
-    } = body
+    const body = await readBody(request)
+    const contractorId = textIfSent(body.contractorId, 'contractorId')
+    const clientId = textIfSent(body.clientId, 'clientId')
+    const title = optionalText(body.title, 'title', 200)
+    const rateType = enumValue(body.rateType, RATE_TYPES, 'rateType')
+    const retainerBasis = enumValue(body.retainerBasis, RETAINER_BASES, 'retainerBasis')
+    const projectPayMode = enumValue(body.projectPayMode, PROJECT_PAY_MODES, 'projectPayMode')
+    const status = enumValue(body.status, ENGAGEMENT_STATUSES, 'status')
+    const startDate = optionalDate(body.startDate, 'startDate')
+    const endDate = optionalDate(body.endDate, 'endDate')
 
     const [engagement] = await prisma.$transaction([
       prisma.engagement.update({
@@ -69,8 +68,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           retainerBasis,
           projectPayMode,
           status,
-          startDate: startDate ? new Date(startDate) : undefined,
-          endDate: endDate ? new Date(endDate) : null,
+          // The column is required, so a blank start date keeps the saved one
+          startDate: startDate ?? undefined,
+          endDate,
         },
         include: { contractor: true, client: true, rates: true },
       }),
@@ -84,6 +84,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json(engagement)
   } catch (error) {
+    const invalid = clientErrorResponse(error)
+    if (invalid) return invalid
     if (
       error &&
       typeof error === 'object' &&

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
 import { recordAudit } from '@/lib/audit'
+import { clientErrorResponse, optionalDate } from '@/lib/validation'
 import { findRateOn } from '@/lib/payroll/calculate'
 
 interface RouteParams {
@@ -17,12 +18,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const { session } = guard
 
     const { id } = await params
-    const body = await request.json().catch(() => ({}))
-    const completedAt = body.completedAt ? new Date(body.completedAt) : new Date()
-
-    if (Number.isNaN(completedAt.getTime())) {
-      return NextResponse.json({ error: 'Invalid completion date' }, { status: 400 })
-    }
+    // The body is optional here: with none, the project completes today
+    const body = await request.json().catch(() => null)
+    const completedAt = optionalDate(body?.completedAt, 'completedAt') ?? new Date()
 
     const engagement = await prisma.engagement.findUnique({
       where: { id },
@@ -75,6 +73,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json(milestone, { status: 201 })
   } catch (error) {
+    const invalid = clientErrorResponse(error)
+    if (invalid) return invalid
     console.error('POST /api/engagements/[id]/complete error:', error)
     return NextResponse.json(
       { error: 'Failed to mark project as complete' },

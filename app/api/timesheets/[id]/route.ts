@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
 import { recordAudit } from '@/lib/audit'
+import { clientErrorResponse, optionalDate, optionalHours, optionalText, readBody } from '@/lib/validation'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -44,8 +45,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const { session } = guard
 
     const { id } = await params
-    const body = await request.json()
-    const { date, hours, description } = body
+    const body = await readBody(request)
+    const date = optionalDate(body.date, 'date') ?? undefined
+    const hours = optionalHours(body.hours)
+    const description = optionalText(body.description, 'description')
 
     const existing = await prisma.timesheet.findUnique({ where: { id } })
 
@@ -62,21 +65,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    const parsedHours = hours === '' || hours === undefined ? null : hours
-
-    if (parsedHours !== null && !(Number(parsedHours) > 0 && Number(parsedHours) <= 24)) {
-      return NextResponse.json(
-        { error: 'Hours must be between 0 and 24' },
-        { status: 400 }
-      )
-    }
-
     const [timesheet] = await prisma.$transaction([
       prisma.timesheet.update({
         where: { id },
         data: {
-          date: date ? new Date(date) : undefined,
-          hours: parsedHours,
+          date,
+          hours,
           description,
           ...(existing.status === 'REJECTED' && {
             status: 'SUBMITTED',
@@ -91,12 +85,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         action: 'timesheet.updated',
         entityType: 'Timesheet',
         entityId: id,
-        metadata: { date, hours: parsedHours },
+        metadata: { date: date?.toISOString(), hours },
       }),
     ])
 
     return NextResponse.json(timesheet)
   } catch (error) {
+    const invalid = clientErrorResponse(error)
+    if (invalid) return invalid
     if (
       error &&
       typeof error === 'object' &&

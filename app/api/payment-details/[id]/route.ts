@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
 import { recordAudit } from '@/lib/audit'
+import { clientErrorResponse, optionalText, readBody, textIfSent } from '@/lib/validation'
 import { encrypt } from '@/lib/crypto'
 import { isPaymentMethod, toMaskedDetail } from '@/lib/payment-details'
 
@@ -20,13 +21,15 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const { session } = guard
 
     const { id } = await params
-    const { method, accountName, accountNumber, bankName, isDefault } = await request.json()
+    const body = await readBody(request)
+    const method = body.method
+    const accountName = textIfSent(body.accountName, 'accountName', 200)
+    const accountNumber = optionalText(body.accountNumber, 'accountNumber', 100)
+    const bankName = optionalText(body.bankName, 'bankName', 200)
+    const isDefault = body.isDefault
 
     if (method !== undefined && !isPaymentMethod(method)) {
       return NextResponse.json({ error: 'Invalid payment method' }, { status: 400 })
-    }
-    if (accountName !== undefined && !accountName) {
-      return NextResponse.json({ error: 'accountName cannot be empty' }, { status: 400 })
     }
 
     const existing = await prisma.contractorPaymentDetail.findUnique({ where: { id } })
@@ -48,8 +51,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         data: {
           method,
           accountName,
-          bankName: bankName === undefined ? undefined : bankName || null,
-          ...(accountNumber && { accountNumber: encrypt(String(accountNumber)) }),
+          bankName,
+          ...(accountNumber && { accountNumber: encrypt(accountNumber) }),
           ...(isDefault === true && { isDefault: true }),
         },
       })
@@ -71,6 +74,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json(toMaskedDetail(detail))
   } catch (error) {
+    const invalid = clientErrorResponse(error)
+    if (invalid) return invalid
     console.error('PATCH /api/payment-details/[id] error:', error)
     return NextResponse.json({ error: 'Failed to update payment detail' }, { status: 500 })
   }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
 import { recordAudit } from '@/lib/audit'
+import { CURRENCIES, RATE_WHOLE_DIGITS, clientErrorResponse, enumValue, moneyAmount, optionalText, readBody, requiredDate } from '@/lib/validation'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -37,24 +38,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const { session } = guard
 
     const { id } = await params
-    const body = await request.json()
-    const { amount, currency, effectiveFrom, notes } = body
-
-    if (!amount || !effectiveFrom) {
-      return NextResponse.json(
-        { error: 'amount and effectiveFrom are required' },
-        { status: 400 }
-      )
-    }
-    if (!(Number(amount) > 0)) {
-      return NextResponse.json({ error: 'amount must be greater than zero' }, { status: 400 })
-    }
-
-    const newEffectiveFrom = new Date(effectiveFrom)
-
-    if (Number.isNaN(newEffectiveFrom.getTime())) {
-      return NextResponse.json({ error: 'Invalid effectiveFrom date' }, { status: 400 })
-    }
+    const body = await readBody(request)
+    const amount = moneyAmount(body.amount, 'amount', RATE_WHOLE_DIGITS)
+    const currency = enumValue(body.currency, CURRENCIES, 'currency') ?? 'PHP'
+    const newEffectiveFrom = requiredDate(body.effectiveFrom, 'effectiveFrom')
+    const notes = optionalText(body.notes, 'notes')
 
     const engagement = await prisma.engagement.findUnique({ where: { id } })
     if (!engagement) {
@@ -88,22 +76,24 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         data: {
           engagementId: id,
           amount,
-          currency: currency || 'PHP',
+          currency,
           effectiveFrom: newEffectiveFrom,
-          notes: notes || null,
+          notes,
         },
       })
       await recordAudit(tx, session, {
         action: 'rate.created',
         entityType: 'Engagement',
         entityId: id,
-        metadata: { amount, currency: currency || 'PHP', effectiveFrom },
+        metadata: { amount, currency, effectiveFrom: newEffectiveFrom.toISOString() },
       })
       return created
     })
 
     return NextResponse.json(newRate, { status: 201 })
   } catch (error) {
+    const invalid = clientErrorResponse(error)
+    if (invalid) return invalid
     console.error('POST /api/engagements/[id]/rates error:', error)
     return NextResponse.json(
       { error: 'Failed to add new rate' },

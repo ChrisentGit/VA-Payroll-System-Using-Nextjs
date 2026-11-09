@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
 import { recordAudit } from '@/lib/audit'
+import { clientErrorResponse, optionalText, readBody, requiredText } from '@/lib/validation'
 import { describeDetail } from '@/lib/payment-details'
 
 interface RouteParams {
@@ -28,11 +29,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const { session } = guard
 
     const { id } = await params
-    const { contractorId, paymentReference } = await request.json()
-
-    if (!contractorId) {
-      return NextResponse.json({ error: 'contractorId is required' }, { status: 400 })
-    }
+    const body = await readBody(request)
+    const contractorId = requiredText(body.contractorId, 'contractorId')
+    const paymentReference = optionalText(body.paymentReference, 'paymentReference', 200) ?? null
 
     const problem = await findFinalizedRun(id)
     if (problem) return problem
@@ -49,7 +48,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           paidAt: new Date(),
           paidBy: session.user.name || session.user.email || 'Unknown',
           paidTo: detail ? describeDetail(detail) : null,
-          paymentReference: paymentReference || null,
+          paymentReference,
         },
       })
 
@@ -61,7 +60,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           metadata: {
             contractorId,
             lineItems: result.count,
-            paymentReference: paymentReference || null,
+            paymentReference,
           },
         })
       }
@@ -78,6 +77,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json({ success: true, lineItems: count })
   } catch (error) {
+    const invalid = clientErrorResponse(error)
+    if (invalid) return invalid
     console.error('POST /api/payroll-runs/[id]/payments error:', error)
     return NextResponse.json({ error: 'Failed to record payment' }, { status: 500 })
   }

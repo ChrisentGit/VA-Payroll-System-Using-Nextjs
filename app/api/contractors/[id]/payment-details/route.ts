@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
 import { recordAudit } from '@/lib/audit'
+import { clientErrorResponse, optionalText, readBody, requiredText } from '@/lib/validation'
 import { encrypt } from '@/lib/crypto'
 import { isPaymentMethod, toMaskedDetail } from '@/lib/payment-details'
 
@@ -36,13 +37,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const { session } = guard
 
     const { id } = await params
-    const { method, accountName, accountNumber, bankName, isDefault } = await request.json()
+    const body = await readBody(request)
+    const method = body.method
+    const accountName = requiredText(body.accountName, 'accountName', 200)
+    const accountNumber = requiredText(body.accountNumber, 'accountNumber', 100)
+    const bankName = optionalText(body.bankName, 'bankName', 200) ?? null
+    const isDefault = body.isDefault
 
-    if (!isPaymentMethod(method) || !accountName || !accountNumber) {
-      return NextResponse.json(
-        { error: 'A valid method, accountName, and accountNumber are required' },
-        { status: 400 }
-      )
+    if (!isPaymentMethod(method)) {
+      return NextResponse.json({ error: 'Invalid payment method' }, { status: 400 })
     }
 
     const contractor = await prisma.contractor.findUnique({ where: { id }, select: { id: true } })
@@ -67,8 +70,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           contractorId: id,
           method,
           accountName,
-          accountNumber: encrypt(String(accountNumber)),
-          bankName: bankName || null,
+          accountNumber: encrypt(accountNumber),
+          bankName,
           isDefault: makeDefault,
         },
       })
@@ -85,6 +88,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json(toMaskedDetail(detail), { status: 201 })
   } catch (error) {
+    const invalid = clientErrorResponse(error)
+    if (invalid) return invalid
     console.error('POST /api/contractors/[id]/payment-details error:', error)
     return NextResponse.json({ error: 'Failed to save payment detail' }, { status: 500 })
   }

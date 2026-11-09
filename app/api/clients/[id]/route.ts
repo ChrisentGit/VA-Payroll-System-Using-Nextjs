@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
 import { recordAudit } from '@/lib/audit'
+import { CLIENT_STATUSES, CURRENCIES, clientErrorResponse, enumValue, optionalText, readBody, textIfSent } from '@/lib/validation'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -38,8 +39,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const { session } = guard
 
     const { id } = await params
-    const body = await request.json()
-    const { name, email, contactPerson, billingCurrency, status, notes } = body
+    const body = await readBody(request)
+    const name = textIfSent(body.name, 'name', 200)
+    const email = optionalText(body.email, 'email', 254)
+    const contactPerson = optionalText(body.contactPerson, 'contactPerson', 200)
+    const billingCurrency = enumValue(body.billingCurrency, CURRENCIES, 'billingCurrency')
+    const status = enumValue(body.status, CLIENT_STATUSES, 'status')
+    const notes = optionalText(body.notes, 'notes')
 
     const [client] = await prisma.$transaction([
       prisma.client.update({
@@ -56,6 +62,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json(client)
   } catch (error) {
+    const invalid = clientErrorResponse(error)
+    if (invalid) return invalid
     if (
       error &&
       typeof error === 'object' &&

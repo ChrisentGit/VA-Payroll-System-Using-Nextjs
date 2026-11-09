@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
 import { recordAudit } from '@/lib/audit'
+import { CONTRACTOR_STATUSES, clientErrorResponse, enumValue, optionalDate, optionalText, readBody, textIfSent } from '@/lib/validation'
 import { encryptIfPresent } from '@/lib/crypto'
 import { can } from '@/lib/permissions'
 
@@ -43,8 +44,15 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const { session } = guard
 
     const { id } = await params
-    const body = await request.json()
-    const { name, email, phone, taxId, status, startDate, endDate, notes } = body
+    const body = await readBody(request)
+    const name = textIfSent(body.name, 'name', 200)
+    const email = textIfSent(body.email, 'email', 254)
+    const phone = optionalText(body.phone, 'phone', 50)
+    const taxId = optionalText(body.taxId, 'taxId', 100)
+    const status = enumValue(body.status, CONTRACTOR_STATUSES, 'status')
+    const startDate = optionalDate(body.startDate, 'startDate')
+    const endDate = optionalDate(body.endDate, 'endDate')
+    const notes = optionalText(body.notes, 'notes')
 
     const [contractor] = await prisma.$transaction([
       prisma.contractor.update({
@@ -55,8 +63,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           phone,
           taxId: taxId === undefined ? undefined : encryptIfPresent(taxId),
           status,
-          startDate: startDate ? new Date(startDate) : null,
-          endDate: endDate ? new Date(endDate) : null,
+          startDate,
+          endDate,
           notes,
         },
       }),
@@ -70,6 +78,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json(contractor)
   } catch (error) {
+    const invalid = clientErrorResponse(error)
+    if (invalid) return invalid
     if (
       error &&
       typeof error === 'object' &&

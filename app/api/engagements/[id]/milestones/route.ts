@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
 import { recordAudit } from '@/lib/audit'
+import { CURRENCIES, MILESTONE_WHOLE_DIGITS, clientErrorResponse, enumValue, moneyAmount, readBody, requiredText } from '@/lib/validation'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -15,14 +16,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const { session } = guard
 
     const { id } = await params
-    const { title, amount, currency } = await request.json()
-
-    if (!title || !(Number(amount) > 0)) {
-      return NextResponse.json(
-        { error: 'title and an amount greater than zero are required' },
-        { status: 400 }
-      )
-    }
+    const body = await readBody(request)
+    const title = requiredText(body.title, 'title', 200)
+    const amount = moneyAmount(body.amount, 'amount', MILESTONE_WHOLE_DIGITS)
+    const currency = enumValue(body.currency, CURRENCIES, 'currency') ?? 'PHP'
 
     const engagement = await prisma.engagement.findUnique({ where: { id } })
 
@@ -38,19 +35,21 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const milestone = await prisma.$transaction(async (tx) => {
       const created = await tx.milestone.create({
-        data: { engagementId: id, title, amount, currency: currency || 'PHP' },
+        data: { engagementId: id, title, amount, currency },
       })
       await recordAudit(tx, session, {
         action: 'milestone.created',
         entityType: 'Milestone',
         entityId: created.id,
-        metadata: { engagementId: id, title, amount, currency: currency || 'PHP' },
+        metadata: { engagementId: id, title, amount, currency },
       })
       return created
     })
 
     return NextResponse.json(milestone, { status: 201 })
   } catch (error) {
+    const invalid = clientErrorResponse(error)
+    if (invalid) return invalid
     console.error('POST /api/engagements/[id]/milestones error:', error)
     return NextResponse.json({ error: 'Failed to add milestone' }, { status: 500 })
   }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
 import { recordAudit } from '@/lib/audit'
+import { CONTRACTOR_STATUSES, clientErrorResponse, enumValue, optionalDate, optionalText, readBody, requiredText } from '@/lib/validation'
 import { encryptIfPresent } from '@/lib/crypto'
 
 // GET /api/contractors — list all contractors
@@ -30,27 +31,27 @@ export async function POST(request: NextRequest) {
     if (guard.error) return guard.error
     const { session } = guard
 
-    const body = await request.json()
-    const { name, email, phone, taxId, status, startDate, endDate, notes } = body
-
-    if (!name || !email) {
-      return NextResponse.json(
-        { error: 'name and email are required' },
-        { status: 400 }
-      )
-    }
+    const body = await readBody(request)
+    const name = requiredText(body.name, 'name', 200)
+    const email = requiredText(body.email, 'email', 254)
+    const phone = optionalText(body.phone, 'phone', 50)
+    const taxId = optionalText(body.taxId, 'taxId', 100)
+    const status = enumValue(body.status, CONTRACTOR_STATUSES, 'status')
+    const startDate = optionalDate(body.startDate, 'startDate')
+    const endDate = optionalDate(body.endDate, 'endDate')
+    const notes = optionalText(body.notes, 'notes')
 
     const contractor = await prisma.$transaction(async (tx) => {
       const created = await tx.contractor.create({
         data: {
           name,
           email,
-          phone: phone || null,
+          phone,
           taxId: encryptIfPresent(taxId),
-          status: status || 'ACTIVE',
-          startDate: startDate ? new Date(startDate) : null,
-          endDate: endDate ? new Date(endDate) : null,
-          notes: notes || null,
+          status: status ?? 'ACTIVE',
+          startDate,
+          endDate,
+          notes,
         },
       })
       await recordAudit(tx, session, {
@@ -64,6 +65,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(contractor, { status: 201 })
   } catch (error) {
+    const invalid = clientErrorResponse(error)
+    if (invalid) return invalid
     if (
       error &&
       typeof error === 'object' &&

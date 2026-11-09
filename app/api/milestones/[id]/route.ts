@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
 import { recordAudit } from '@/lib/audit'
+import { clientErrorResponse, optionalDate, readBody } from '@/lib/validation'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -17,7 +18,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const { session } = guard
 
     const { id } = await params
-    const { completed, completedAt } = await request.json()
+    const body = await readBody(request)
+    const completed = body.completed
+
+    if (typeof completed !== 'boolean') {
+      return NextResponse.json({ error: 'completed must be true or false' }, { status: 400 })
+    }
+
+    const date = optionalDate(body.completedAt, 'completedAt') ?? new Date()
 
     const milestone = await prisma.milestone.findUnique({
       where: { id },
@@ -29,12 +37,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
     if (milestone.lineItem) {
       return NextResponse.json({ error: IN_PAYROLL }, { status: 409 })
-    }
-
-    const date = completedAt ? new Date(completedAt) : new Date()
-
-    if (Number.isNaN(date.getTime())) {
-      return NextResponse.json({ error: 'Invalid completion date' }, { status: 400 })
     }
 
     const [updated] = await prisma.$transaction([
@@ -51,6 +53,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json(updated)
   } catch (error) {
+    const invalid = clientErrorResponse(error)
+    if (invalid) return invalid
     console.error('PATCH /api/milestones/[id] error:', error)
     return NextResponse.json({ error: 'Failed to update milestone' }, { status: 500 })
   }

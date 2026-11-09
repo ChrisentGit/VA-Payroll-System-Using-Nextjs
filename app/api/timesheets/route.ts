@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
 import { recordAudit } from '@/lib/audit'
+import { clientErrorResponse, optionalHours, optionalText, readBody, requiredDate, requiredText } from '@/lib/validation'
 
 // GET /api/timesheets — list all timesheets
 export async function GET() {
@@ -33,22 +34,12 @@ export async function POST(request: NextRequest) {
     if (guard.error) return guard.error
     const { session } = guard
 
-    const body = await request.json()
-    const { engagementId, date, hours, description, status } = body
-
-    if (!engagementId || !date) {
-      return NextResponse.json(
-        { error: 'engagementId and date are required' },
-        { status: 400 }
-      )
-    }
-
-    if (hours && !(Number(hours) > 0 && Number(hours) <= 24)) {
-      return NextResponse.json(
-        { error: 'Hours must be between 0 and 24' },
-        { status: 400 }
-      )
-    }
+    const body = await readBody(request)
+    const engagementId = requiredText(body.engagementId, 'engagementId')
+    const date = requiredDate(body.date, 'date')
+    const hours = optionalHours(body.hours) ?? null
+    const description = optionalText(body.description, 'description')
+    const status = body.status
 
     // Look up the engagement to get its contractorId (avoids trusting client input for this)
     const engagement = await prisma.engagement.findUnique({
@@ -64,9 +55,9 @@ export async function POST(request: NextRequest) {
         data: {
           engagementId,
           contractorId: engagement.contractorId,
-          date: new Date(date),
-          hours: hours || null,
-          description: description || null,
+          date,
+          hours,
+          description,
           status: status === 'DRAFT' ? 'DRAFT' : 'SUBMITTED',
         },
         include: { contractor: true, engagement: { include: { client: true } } },
@@ -75,13 +66,15 @@ export async function POST(request: NextRequest) {
         action: 'timesheet.created',
         entityType: 'Timesheet',
         entityId: created.id,
-        metadata: { engagementId, date, hours: hours || null },
+        metadata: { engagementId, date: date.toISOString(), hours },
       })
       return created
     })
 
     return NextResponse.json(timesheet, { status: 201 })
   } catch (error) {
+    const invalid = clientErrorResponse(error)
+    if (invalid) return invalid
     if (
       error &&
       typeof error === 'object' &&

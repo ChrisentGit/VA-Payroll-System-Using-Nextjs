@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
 import { recordAudit } from '@/lib/audit'
+import { clientErrorResponse, readBody, requiredText } from '@/lib/validation'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -16,15 +17,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const { session } = guard
 
     const { id } = await params
-    const body = await request.json()
-    const { rejectionReason } = body
-
-    if (!rejectionReason) {
-      return NextResponse.json(
-        { error: 'rejectionReason is required' },
-        { status: 400 }
-      )
-    }
+    const body = await readBody(request)
+    const rejectionReason = requiredText(body.rejectionReason, 'rejectionReason', 1000)
 
     const existing = await prisma.timesheet.findUnique({ where: { id } })
 
@@ -65,6 +59,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     return NextResponse.json(timesheet)
   } catch (error) {
+    const invalid = clientErrorResponse(error)
+    if (invalid) return invalid
     console.error('POST /api/timesheets/[id]/reject error:', error)
     return NextResponse.json(
       { error: 'Failed to reject timesheet' },

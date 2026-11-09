@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
 import { recordAudit } from '@/lib/audit'
+import { clientErrorResponse, enumValue, readBody } from '@/lib/validation'
 import { getPayrollSettings } from '@/lib/payroll/settings'
 
 const FREQUENCIES = ['MONTHLY', 'SEMI_MONTHLY'] as const
@@ -26,9 +27,10 @@ export async function PATCH(request: NextRequest) {
     if (guard.error) return guard.error
     const { session } = guard
 
-    const { payFrequency } = await request.json()
+    const body = await readBody(request)
+    const payFrequency = enumValue(body.payFrequency, FREQUENCIES, 'payFrequency')
 
-    if (!FREQUENCIES.includes(payFrequency)) {
+    if (!payFrequency) {
       return NextResponse.json({ error: 'Invalid pay frequency' }, { status: 400 })
     }
 
@@ -48,6 +50,8 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json(settings)
   } catch (error) {
+    const invalid = clientErrorResponse(error)
+    if (invalid) return invalid
     console.error('PATCH /api/settings/payroll error:', error)
     return NextResponse.json({ error: 'Failed to save settings' }, { status: 500 })
   }
