@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Notice } from '@/components/ui/notice'
 
 interface ChangePasswordFormProps {
   email: string
@@ -58,28 +59,22 @@ export default function ChangePasswordForm({ email, forced }: ChangePasswordForm
       }
     } catch (err) {
       console.error('Change password error:', err)
-      setError('Network error — please try again')
+      setError('Network error. Please try again.')
     }
 
     setIsSubmitting(false)
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 max-w-sm">
+    <form onSubmit={handleSubmit} className="space-y-4">
       {forced && (
-        <div className="bg-amber-50 text-amber-900 text-sm p-3 rounded-md border border-amber-200">
-          You are using a temporary password. Choose your own to continue.
-        </div>
+        <Notice tone="warning">You are using a temporary password. Choose your own to continue.</Notice>
       )}
       {error && (
-        <div className="bg-red-50 text-red-700 text-sm p-3 rounded-md border border-red-200">
-          {error}
-        </div>
+        <Notice tone="error">{error}</Notice>
       )}
       {saved && (
-        <div className="bg-green-50 text-green-800 text-sm p-3 rounded-md border border-green-200">
-          Your password has been changed. Any other devices have been signed out.
-        </div>
+        <Notice tone="success">Your password has been changed. Any other devices have been signed out.</Notice>
       )}
 
       <div>

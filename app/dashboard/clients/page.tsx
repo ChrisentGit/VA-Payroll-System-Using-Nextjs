@@ -1,9 +1,14 @@
+import Link from 'next/link'
+import { Building2, Plus } from 'lucide-react'
 import { requirePagePermission } from '@/lib/authz'
 import { can } from '@/lib/permissions'
-import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
+import DeleteButton from '@/components/DeleteButton'
+import PageHeader from '@/components/shell/PageHeader'
+import { TablePanel } from '@/components/shell/Panels'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { EmptyState } from '@/components/ui/empty-state'
+import { StatusBadge } from '@/components/ui/status-badge'
 import {
   Table,
   TableBody,
@@ -12,7 +17,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import DeleteClientButton from '@/components/clients/DeleteClientButton'
 
 export default async function ClientsPage() {
   const session = await requirePagePermission('directory:read')
@@ -22,57 +26,68 @@ export default async function ClientsPage() {
     orderBy: { createdAt: 'desc' },
   })
 
+  const addButton = canEdit && (
+    <Button asChild>
+      <Link href="/dashboard/clients/new">
+        <Plus aria-hidden />
+        Add Client
+      </Link>
+    </Button>
+  )
+
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold">Clients</h1>
-        {canEdit && (
-          <Link href="/dashboard/clients/new">
-            <Button>Add Client</Button>
-          </Link>
-        )}
-      </div>
+    <div>
+      <PageHeader
+        title="Clients"
+        description="The companies your contractors work with."
+        actions={clients.length > 0 && addButton}
+      />
 
       {clients.length === 0 ? (
-        <p className="text-gray-500">No clients yet.</p>
+        <EmptyState
+          icon={Building2}
+          title="No clients yet"
+          description="Add a client so you can assign contractors to them."
+          action={addButton}
+        />
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Contact person</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Currency</TableHead>
-              <TableHead>Status</TableHead>
-              {canEdit && <TableHead className="text-right">Actions</TableHead>}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {clients.map((c) => (
-              <TableRow key={c.id}>
-                <TableCell>{c.name}</TableCell>
-                <TableCell>{c.contactPerson || '—'}</TableCell>
-                <TableCell>{c.email || '—'}</TableCell>
-                <TableCell>{c.billingCurrency}</TableCell>
-                <TableCell>
-                  <Badge variant={c.status === 'ACTIVE' ? 'default' : 'secondary'}>
-                    {c.status}
-                  </Badge>
-                </TableCell>
-                {canEdit && (
-                  <TableCell className="text-right space-x-2">
-                    <Link href={`/dashboard/clients/${c.id}/edit`}>
-                      <Button variant="outline" size="sm">
-                        Edit
-                      </Button>
-                    </Link>
-                    <DeleteClientButton id={c.id} />
-                  </TableCell>
-                )}
+        <TablePanel>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Contact person</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Currency</TableHead>
+                <TableHead>Status</TableHead>
+                {canEdit && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {clients.map((c) => (
+                <TableRow key={c.id}>
+                  <TableCell className="font-medium">{c.name}</TableCell>
+                  <TableCell>{c.contactPerson || '—'}</TableCell>
+                  <TableCell>{c.email || '—'}</TableCell>
+                  <TableCell>{c.billingCurrency}</TableCell>
+                  <TableCell>
+                    <StatusBadge status={c.status} />
+                  </TableCell>
+                  {canEdit && (
+                    <TableCell>
+                      <div className="flex justify-end gap-2">
+                        <Button asChild variant="outline" size="sm">
+                          <Link href={`/dashboard/clients/${c.id}/edit`}>Edit</Link>
+                        </Button>
+                        <DeleteButton url={`/api/clients/${c.id}`} noun="client" />
+                      </div>
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TablePanel>
       )}
     </div>
   )

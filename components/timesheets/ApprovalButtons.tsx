@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+import { useFeedback } from '@/components/ui/feedback'
+import { sendRequest } from '@/lib/client-request'
 
 export default function ApprovalButtons({
   id,
@@ -12,41 +14,52 @@ export default function ApprovalButtons({
   rejectOnly?: boolean
 }) {
   const router = useRouter()
+  const { ask, toast } = useFeedback()
   const [isProcessing, setIsProcessing] = useState(false)
 
-  async function handleApprove() {
+  async function send(path: string, successMessage: string, fallbackError: string, body?: object) {
     setIsProcessing(true)
-    const response = await fetch(`/api/timesheets/${id}/approve`, { method: 'POST' })
-    if (response.ok) {
+    const result = await sendRequest(`/api/timesheets/${id}/${path}`, {
+      method: 'POST',
+      body,
+      fallbackError,
+    })
+
+    if (result.ok) {
+      toast(successMessage)
       router.refresh()
     } else {
-      alert('Failed to approve timesheet')
-      setIsProcessing(false)
+      toast(result.error, 'error')
     }
+    setIsProcessing(false)
   }
 
   async function handleReject() {
-    const reason = window.prompt('Reason for rejection:')
+    const reason = await ask({
+      title: 'Reject this timesheet?',
+      description: 'The contractor will see your reason and can fix and resubmit it.',
+      label: 'Reason',
+      placeholder: 'What needs to change?',
+      required: true,
+      multiline: true,
+      confirmLabel: 'Reject',
+      danger: true,
+    })
     if (!reason) return
 
-    setIsProcessing(true)
-    const response = await fetch(`/api/timesheets/${id}/reject`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rejectionReason: reason }),
+    await send('reject', 'Timesheet rejected', 'Failed to reject timesheet', {
+      rejectionReason: reason,
     })
-    if (response.ok) {
-      router.refresh()
-    } else {
-      alert('Failed to reject timesheet')
-      setIsProcessing(false)
-    }
   }
 
   return (
     <div className="flex gap-2">
       {!rejectOnly && (
-        <Button size="sm" onClick={handleApprove} disabled={isProcessing}>
+        <Button
+          size="sm"
+          onClick={() => send('approve', 'Timesheet approved', 'Failed to approve timesheet')}
+          disabled={isProcessing}
+        >
           Approve
         </Button>
       )}

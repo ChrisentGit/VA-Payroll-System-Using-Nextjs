@@ -105,3 +105,41 @@ Do this if the key may have been exposed, or on whatever schedule you choose. Th
    ```
 
 4. Remove `ENCRYPTION_KEY_PREVIOUS` from the host and redeploy.
+
+## Public demo
+
+A public demo is a second deployment with its own database, separate from the real one. Never point it at a database that holds real records.
+
+With `DEMO_MODE=true`:
+
+- The sign-in page offers one-click access as an admin or a contractor, and password sign-in is turned off.
+- The API refuses every change, so visitors can look around but cannot save anything.
+- Demo sign-in stops working if the database holds any account outside the `demo.bluemoso.example` domain.
+
+To set one up:
+
+1. Create a new PostgreSQL database with `demo` in its name. The seed script refuses any other name, because it wipes the database first.
+2. Create a second deployment of the app. Give it this new `DATABASE_URL`, its own `AUTH_SECRET` and `ENCRYPTION_KEY`, and `DEMO_MODE` set to `true`.
+3. From your machine, apply the migrations and load the made-up records.
+
+   In bash:
+
+   ```bash
+   export DATABASE_URL="<demo database url>"
+   export ENCRYPTION_KEY="<the demo key>"
+   export DEMO_MODE=true
+   npx prisma migrate deploy
+   npm run seed:demo
+   ```
+
+   In PowerShell:
+
+   ```powershell
+   $env:DATABASE_URL = "<demo database url>"
+   $env:ENCRYPTION_KEY = "<the demo key>"
+   $env:DEMO_MODE = "true"
+   npx prisma migrate deploy
+   npm run seed:demo
+   ```
+
+Dates are relative to the day you seed, so run the last command again whenever the demo starts to look old.

@@ -2,6 +2,8 @@ import { requirePagePermission } from '@/lib/authz'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import TimesheetForm from '@/components/timesheets/TimesheetForm'
+import PageHeader from '@/components/shell/PageHeader'
+import { FormPanel } from '@/components/shell/Panels'
 
 interface EditPageProps {
   params: Promise<{ id: string }>
@@ -25,21 +27,23 @@ export default async function EditTimesheetPage({ params }: EditPageProps) {
   }
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-semibold mb-6">Edit Timesheet</h1>
-      <TimesheetForm
-        engagements={engagements.map((e) => ({
-          id: e.id,
-          label: `${e.contractor.name} → ${e.client.name}`,
-        }))}
-        timesheetId={timesheet.id}
-        initialData={{
-          engagementId: timesheet.engagementId,
-          date: timesheet.date.toISOString(),
-          hours: timesheet.hours?.toString() || null,
-          description: timesheet.description,
-        }}
-      />
+    <div className="space-y-6">
+      <PageHeader title="Edit Timesheet" back={{ href: '/dashboard/timesheets', label: 'Timesheets' }} />
+      <FormPanel>
+        <TimesheetForm
+          engagements={engagements.map((e) => ({
+            id: e.id,
+            label: `${e.contractor.name} → ${e.client.name}`,
+          }))}
+          timesheetId={timesheet.id}
+          initialData={{
+            engagementId: timesheet.engagementId,
+            date: timesheet.date.toISOString(),
+            hours: timesheet.hours?.toString() || null,
+            description: timesheet.description,
+          }}
+        />
+      </FormPanel>
     </div>
   )
 }

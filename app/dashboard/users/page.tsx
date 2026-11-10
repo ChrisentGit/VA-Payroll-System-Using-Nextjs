@@ -1,8 +1,13 @@
 import Link from 'next/link'
+import { Plus } from 'lucide-react'
 import { requirePagePermission } from '@/lib/authz'
 import { prisma } from '@/lib/prisma'
-import { Badge } from '@/components/ui/badge'
+import { roleLabel } from '@/lib/labels'
+import PageHeader from '@/components/shell/PageHeader'
+import { TablePanel } from '@/components/shell/Panels'
 import { Button } from '@/components/ui/button'
+import { Person } from '@/components/ui/person'
+import { StatusBadge } from '@/components/ui/status-badge'
 import {
   Table,
   TableBody,
@@ -28,48 +33,52 @@ export default async function UsersPage() {
   })
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold">Users</h1>
-        <Link href="/dashboard/users/new">
-          <Button>Add User</Button>
-        </Link>
-      </div>
+    <div>
+      <PageHeader
+        title="Users"
+        description="Who can sign in, and what they can do."
+        actions={
+          <Button asChild>
+            <Link href="/dashboard/users/new">
+              <Plus aria-hidden />
+              Add User
+            </Link>
+          </Button>
+        }
+      />
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>Role</TableHead>
-            <TableHead>Contractor</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {users.map((user) => (
-            <TableRow key={user.id}>
-              <TableCell>{user.name}</TableCell>
-              <TableCell>{user.email}</TableCell>
-              <TableCell>{user.role.replace('_', ' ')}</TableCell>
-              <TableCell>{user.contractor?.name ?? '—'}</TableCell>
-              <TableCell>
-                <Badge variant={user.isActive ? 'default' : 'secondary'}>
-                  {user.isActive ? 'Active' : 'Inactive'}
-                </Badge>
-              </TableCell>
-              <TableCell className="text-right">
-                <Link href={`/dashboard/users/${user.id}/edit`}>
-                  <Button variant="outline" size="sm">
-                    Edit
-                  </Button>
-                </Link>
-              </TableCell>
+      <TablePanel>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead>Contractor</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {users.map((user) => (
+              <TableRow key={user.id}>
+                <TableCell>
+                  <Person name={user.name} detail={user.email} />
+                </TableCell>
+                <TableCell>{roleLabel(user.role)}</TableCell>
+                <TableCell>{user.contractor?.name ?? '—'}</TableCell>
+                <TableCell>
+                  <StatusBadge status={user.isActive ? 'ACTIVE' : 'INACTIVE'} />
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={`/dashboard/users/${user.id}/edit`}>Edit</Link>
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TablePanel>
     </div>
   )
 }

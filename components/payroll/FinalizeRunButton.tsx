@@ -3,27 +3,35 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+import { useFeedback } from '@/components/ui/feedback'
+import { sendRequest } from '@/lib/client-request'
 
 export default function FinalizeRunButton({ runId }: { runId: string }) {
   const router = useRouter()
+  const { confirm, toast } = useFeedback()
   const [isFinalizing, setIsFinalizing] = useState(false)
 
   async function handleFinalize() {
-    const confirmed = window.confirm(
-      'Finalize this payroll run? This locks it from further changes.'
-    )
+    const confirmed = await confirm({
+      title: 'Finalize this payroll run?',
+      description: 'This locks the run and its exchange rates from further changes.',
+      confirmLabel: 'Finalize Run',
+    })
     if (!confirmed) return
 
     setIsFinalizing(true)
-    const response = await fetch(`/api/payroll-runs/${runId}/finalize`, { method: 'POST' })
+    const result = await sendRequest(`/api/payroll-runs/${runId}/finalize`, {
+      method: 'POST',
+      fallbackError: 'Failed to finalize payroll run',
+    })
 
-    if (response.ok) {
+    if (result.ok) {
+      toast('Payroll run finalized')
       router.refresh()
     } else {
-      const data = await response.json()
-      alert(data.error || 'Failed to finalize payroll run')
-      setIsFinalizing(false)
+      toast(result.error, 'error')
     }
+    setIsFinalizing(false)
   }
 
   return (

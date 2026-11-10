@@ -1,14 +1,15 @@
+import { UserRoundX } from 'lucide-react'
 import { requirePagePermission } from '@/lib/authz'
+import { EmptyState } from '@/components/ui/empty-state'
 
 export default async function NotLinkedPage() {
   await requirePagePermission('portal:access')
 
   return (
-    <div className="p-6 max-w-lg">
-      <h1 className="text-2xl font-semibold mb-2">Your profile is not set up yet</h1>
-      <p className="text-gray-600">
-        This login is not linked to a contractor profile. Please ask your administrator to link it.
-      </p>
-    </div>
+    <EmptyState
+      icon={UserRoundX}
+      title="Your profile is almost ready"
+      description="This login is not linked to a contractor profile yet. Ask your administrator to link it, then sign in again."
+    />
   )
 }

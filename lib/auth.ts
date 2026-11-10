@@ -1,7 +1,8 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
-import { verifyLogin } from "@/lib/login";
+import { verifyDemoLogin, verifyLogin } from "@/lib/login";
+import { isDemoMode } from "@/lib/demo";
 import { clientIp } from "@/lib/throttle";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
@@ -11,8 +12,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
+      // Off in demo mode, because a failed sign-in stores the typed email and the
+      // visitor's IP address in an audit log that demo visitors can read.
       authorize: (credentials, request) =>
-        verifyLogin(credentials?.email, credentials?.password, clientIp(request.headers)),
+        isDemoMode()
+          ? null
+          : verifyLogin(credentials?.email, credentials?.password, clientIp(request.headers)),
+    }),
+    Credentials({
+      id: "demo",
+      credentials: { account: { label: "Account", type: "text" } },
+      authorize: (credentials) => verifyDemoLogin(credentials?.account),
     }),
   ],
   callbacks: {

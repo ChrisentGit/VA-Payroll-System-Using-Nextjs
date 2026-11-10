@@ -1,8 +1,23 @@
 import { requirePagePermission } from '@/lib/authz'
 import { notFound } from 'next/navigation'
+import Link from 'next/link'
 import { Prisma } from '@prisma/client'
+import { Download, Wallet } from 'lucide-react'
 import { prisma } from '@/lib/prisma'
-import { Badge } from '@/components/ui/badge'
+import { formatDateRange, formatMomentDate, formatMoney } from '@/lib/format'
+import { rateTypeLabel } from '@/lib/labels'
+import { groupPayments } from '@/lib/payroll/payments'
+import DeleteButton from '@/components/DeleteButton'
+import ExchangeRateForm from '@/components/payroll/ExchangeRateForm'
+import FinalizeRunButton from '@/components/payroll/FinalizeRunButton'
+import PaymentButtons from '@/components/payroll/PaymentButtons'
+import RunStepper from '@/components/payroll/RunStepper'
+import PageHeader from '@/components/shell/PageHeader'
+import { TablePanel } from '@/components/shell/Panels'
+import { Button } from '@/components/ui/button'
+import { EmptyState } from '@/components/ui/empty-state'
+import { Notice } from '@/components/ui/notice'
+import { StatusBadge } from '@/components/ui/status-badge'
 import {
   Table,
   TableBody,
@@ -11,14 +26,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import FinalizeRunButton from '@/components/payroll/FinalizeRunButton'
-import DeleteRunButton from '@/components/payroll/DeleteRunButton'
-import ExchangeRateForm from '@/components/payroll/ExchangeRateForm'
-import PaymentButtons from '@/components/payroll/PaymentButtons'
-import { Button } from '@/components/ui/button'
-import { formatDate, formatMoney } from '@/lib/format'
-import { groupPayments } from '@/lib/payroll/payments'
-import Link from 'next/link'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -65,42 +72,56 @@ export default async function PayrollRunPage({ params }: PageProps) {
   }
 
   const foreignCurrencies = [...ratesByCurrency].map(([currency, rate]) => ({ currency, rate }))
+  const payments = groupPayments(run.lineItems)
+  const allPaid = payments.length > 0 && payments.every((payment) => payment.isPaid)
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-2">
-        <h1 className="text-2xl font-semibold">
-          Payroll Run — {run.payrollPeriod.startDate.toLocaleDateString()} to{' '}
-          {run.payrollPeriod.endDate.toLocaleDateString()}
-        </h1>
-        <Badge variant={isDraft ? 'secondary' : 'default'}>{run.status}</Badge>
-      </div>
+    <div>
+      <PageHeader
+        title={formatDateRange(run.payrollPeriod.startDate, run.payrollPeriod.endDate)}
+        description={<StatusBadge status={run.status} />}
+        back={{ href: `/dashboard/payroll/${run.payrollPeriodId}`, label: 'Payroll period' }}
+        actions={
+          isDraft ? (
+            <>
+              <FinalizeRunButton runId={run.id} />
+              <DeleteButton
+                url={`/api/payroll-runs/${run.id}`}
+                noun="draft run"
+                description="Its timesheets and milestones go back to unpaid, and you can generate it again."
+                label="Delete Draft"
+                redirectTo={`/dashboard/payroll/${run.payrollPeriodId}`}
+              />
+            </>
+          ) : (
+            // A plain link on purpose: the response is a file download
+            <Button asChild variant="outline">
+              <a href={`/api/payroll-runs/${run.id}/export`}>
+                <Download aria-hidden />
+                Export CSV
+              </a>
+            </Button>
+          )
+        }
+      />
 
-      {isDraft && (
-        <div className="flex gap-3 mb-6">
-          <FinalizeRunButton runId={run.id} />
-          <DeleteRunButton runId={run.id} periodId={run.payrollPeriodId} />
-        </div>
-      )}
-
-      {!isDraft && (
-        <div className="flex gap-3 mb-6">
-          {/* A plain link on purpose: the response is a file download */}
-          <a href={`/api/payroll-runs/${run.id}/export`}>
-            <Button variant="outline">Export CSV</Button>
-          </a>
-        </div>
-      )}
+      <RunStepper
+        steps={[
+          { label: 'Draft generated', done: true },
+          { label: 'Exchange rates set', done: isFullyConverted },
+          { label: 'Finalized', done: !isDraft },
+          { label: 'Everyone paid', done: !isDraft && allPaid },
+        ]}
+      />
 
       {warnings.length > 0 && (
-        <div className="bg-amber-50 text-amber-900 text-sm p-4 rounded-md border border-amber-200 mb-6">
-          <p className="font-medium mb-2">Check before paying</p>
-          <ul className="list-disc pl-5 space-y-1">
+        <Notice tone="warning" title="Check before paying" className="mb-6">
+          <ul className="list-disc space-y-1 pl-4">
             {warnings.map((warning) => (
               <li key={warning}>{warning}</li>
             ))}
           </ul>
-        </div>
+        </Notice>
       )}
 
       {isDraft && foreignCurrencies.length > 0 && (
@@ -112,110 +133,129 @@ export default async function PayrollRunPage({ params }: PageProps) {
       )}
 
       {run.lineItems.length === 0 ? (
-        <p className="text-gray-500">Nothing is due for this period.</p>
+        <EmptyState
+          icon={Wallet}
+          title="Nothing is due for this period"
+          description="No approved timesheets, retainers or completed milestones fall inside these dates."
+        />
       ) : (
         <>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Contractor</TableHead>
-                <TableHead>Client</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Hours</TableHead>
-                <TableHead>Rate</TableHead>
-                <TableHead>Total</TableHead>
-                <TableHead>Total (PHP)</TableHead>
-                <TableHead>Notes</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {run.lineItems.map((li) => (
-                <TableRow key={li.id}>
-                  <TableCell>{li.contractor.name}</TableCell>
-                  <TableCell>{li.engagement.client.name}</TableCell>
-                  <TableCell>{li.rateType.replace('_', ' ')}</TableCell>
-                  <TableCell>{li.hours ? li.hours.toString() : '—'}</TableCell>
-                  <TableCell>
-                    {li.currency} {li.rateAmount.toFixed(2)}
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    {li.currency} {li.totalAmount.toFixed(2)}
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    {li.totalAmountPhp ? `PHP ${li.totalAmountPhp.toFixed(2)}` : '—'}
-                  </TableCell>
-                  <TableCell className="text-sm text-gray-500 whitespace-normal">
-                    {li.notes || '—'}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-
-          <div className="mt-4 text-right space-y-1">
-            {(totalsByCurrency.size > 1 || !isFullyConverted) &&
-              [...totalsByCurrency].map(([currency, total]) => (
-                <div key={currency} className="text-sm text-gray-600">
-                  {currency} {total.toFixed(2)}
-                </div>
-              ))}
-            <div className="font-semibold text-lg">
-              {isFullyConverted
-                ? `Grand total: PHP ${phpTotal.toFixed(2)}`
-                : isDraft
-                  ? 'Grand total: enter exchange rates to see the PHP total'
-                  : 'No PHP conversion was recorded for this run'}
-            </div>
-          </div>
-
-          {!isDraft && (
-            <section className="mt-10">
-              <h2 className="text-lg font-semibold mb-3">Payments</h2>
+          <section>
+            <h2 className="mb-3 text-base font-semibold">Line items</h2>
+            <TablePanel>
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Contractor</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Paid to</TableHead>
-                    <TableHead>Reference</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>Client</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead className="text-right">Hours</TableHead>
+                    <TableHead className="text-right">Rate</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="text-right">Total (PHP)</TableHead>
+                    <TableHead>Notes</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {groupPayments(run.lineItems).map((payment) => (
-                    <TableRow key={payment.contractorId}>
-                      <TableCell>{payment.first.contractor.name}</TableCell>
-                      <TableCell>{formatMoney('PHP', payment.phpTotal)}</TableCell>
-                      <TableCell>
-                        <Badge variant={payment.isPaid ? 'default' : 'secondary'}>
-                          {payment.isPaid && payment.first.paidAt
-                            ? `Paid ${formatDate(payment.first.paidAt)}`
-                            : 'Unpaid'}
-                        </Badge>
+                  {run.lineItems.map((li) => (
+                    <TableRow key={li.id}>
+                      <TableCell className="font-medium">{li.contractor.name}</TableCell>
+                      <TableCell>{li.engagement.client.name}</TableCell>
+                      <TableCell>{rateTypeLabel(li.rateType)}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {li.hours ? li.hours.toString() : '—'}
                       </TableCell>
-                      <TableCell>{payment.isPaid ? payment.first.paidTo || '—' : '—'}</TableCell>
-                      <TableCell>
-                        {payment.isPaid ? payment.first.paymentReference || '—' : '—'}
+                      <TableCell className="text-right tabular-nums">
+                        {formatMoney(li.currency, li.rateAmount)}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Link href={`/dashboard/payroll/runs/${run.id}/payslips/${payment.contractorId}`}>
-                            <Button variant="outline" size="sm">
-                              Payslip
-                            </Button>
-                          </Link>
-                          <PaymentButtons
-                            runId={run.id}
-                            contractorId={payment.contractorId}
-                            isPaid={payment.isPaid}
-                          />
-                        </div>
+                      <TableCell className="text-right font-medium tabular-nums">
+                        {formatMoney(li.currency, li.totalAmount)}
+                      </TableCell>
+                      <TableCell className="text-right font-medium tabular-nums">
+                        {li.totalAmountPhp ? formatMoney('PHP', li.totalAmountPhp) : '—'}
+                      </TableCell>
+                      <TableCell className="min-w-48 text-xs whitespace-normal text-muted-foreground">
+                        {li.notes || '—'}
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
+
+              <div className="space-y-1 border-t bg-muted/40 px-4 py-3 text-right">
+                {(totalsByCurrency.size > 1 || !isFullyConverted) &&
+                  [...totalsByCurrency].map(([currency, total]) => (
+                    <div key={currency} className="text-sm text-muted-foreground tabular-nums">
+                      {formatMoney(currency, total)}
+                    </div>
+                  ))}
+                <div className="text-base font-semibold tabular-nums">
+                  {isFullyConverted
+                    ? `Grand total: ${formatMoney('PHP', phpTotal)}`
+                    : isDraft
+                      ? 'Enter exchange rates to see the PHP total'
+                      : 'No PHP conversion was recorded for this run'}
+                </div>
+              </div>
+            </TablePanel>
+          </section>
+
+          {!isDraft && (
+            <section className="mt-8">
+              <h2 className="mb-3 text-base font-semibold">Payments</h2>
+              <TablePanel>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Contractor</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Paid to</TableHead>
+                      <TableHead>Reference</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {payments.map((payment) => (
+                      <TableRow key={payment.contractorId}>
+                        <TableCell className="font-medium">{payment.first.contractor.name}</TableCell>
+                        <TableCell className="text-right font-medium tabular-nums">
+                          {formatMoney('PHP', payment.phpTotal)}
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge
+                            status={payment.isPaid ? 'PAID' : 'UNPAID'}
+                            label={
+                              payment.isPaid && payment.first.paidAt
+                                ? `Paid ${formatMomentDate(payment.first.paidAt)}`
+                                : undefined
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>{payment.isPaid ? payment.first.paidTo || '—' : '—'}</TableCell>
+                        <TableCell>
+                          {payment.isPaid ? payment.first.paymentReference || '—' : '—'}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex justify-end gap-2">
+                            <Button asChild variant="outline" size="sm">
+                              <Link href={`/dashboard/payroll/runs/${run.id}/payslips/${payment.contractorId}`}>
+                                Payslip
+                              </Link>
+                            </Button>
+                            <PaymentButtons
+                              runId={run.id}
+                              contractorId={payment.contractorId}
+                              contractorName={payment.first.contractor.name}
+                              isPaid={payment.isPaid}
+                            />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TablePanel>
             </section>
           )}
         </>

@@ -1,36 +1,85 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Bluemoso Payroll
 
-## Getting Started
+A payroll system for companies that pay remote contractors. It takes hours from timesheet to payslip, converts foreign-currency pay to Philippine pesos, and records every change.
 
-First, run the development server:
+![Admin dashboard](docs/screenshots/dashboard.png)
+
+| Payroll run | Contractor portal on a phone |
+| --- | --- |
+| ![A payroll run with payments](docs/screenshots/payroll-run.png) | ![Contractor overview on a phone](docs/screenshots/portal-phone.png) |
+
+Screenshots use made-up data.
+
+## What it does
+
+**For the finance team**
+
+- Keep contractors, clients and engagements in one directory, with a full rate history.
+- Pay hourly, by monthly or per-period retainer, on project completion, or by milestone.
+- Choose a monthly or twice-monthly pay schedule.
+- Approve timesheets, or send them back with a reason.
+- Run payroll in four steps: generate a draft, set exchange rates, finalize, and record payments.
+- Export a finalized run as CSV.
+
+**For contractors**
+
+- Log hours from a phone and see whether they were approved or sent back.
+- Read and print payslips.
+- See where they get paid. Payment details are read-only here, so a stolen login cannot redirect anyone's pay.
+
+**Security**
+
+- Four roles, with permissions checked next to the data on every page and API route.
+- Tax IDs and account numbers are encrypted with AES-256-GCM, and account numbers are masked on screen.
+- Sign-in attempts are rate limited, and changing a password ends every other session.
+- Temporary passwords must be changed at first sign-in.
+- Every change and sign-in goes into an append-only audit log.
+- A per-request Content-Security-Policy applies to every page.
+
+## Built with
+
+Next.js 16, React 19, TypeScript, PostgreSQL, Prisma 7, NextAuth v5, Tailwind CSS 4, Radix UI and Vitest.
+
+## Run it locally
+
+You need Node.js 20 or later and a PostgreSQL database.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Fill in `.env`, then set up the database and start the app:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npx prisma migrate deploy
+npx prisma db seed
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Open <http://localhost:3000> and sign in with the admin account you set in `.env`.
 
-## Learn More
+## Try the demo locally
 
-To learn more about Next.js, take a look at the following resources:
+Demo mode shows the app with made-up records, using a separate database. Create an empty database with `demo` in its name, then run these in bash:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+export DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/bluemoso_demo"
+export DEMO_MODE=true
+npx prisma migrate deploy
+npm run seed:demo
+npm run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The sign-in page then offers one-click access as an admin or a contractor. To put a demo online, see [the deployment guide](docs/DEPLOYMENT.md#public-demo).
 
-## Deploy on Vercel
+## Tests
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm test
+npm run lint
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Deployment
+
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).

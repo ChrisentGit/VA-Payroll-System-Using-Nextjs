@@ -1,94 +1,88 @@
-import { formatDate, formatMoney } from '@/lib/format'
+import { Logo } from '@/components/shell/Logo'
+import { StatusBadge } from '@/components/ui/status-badge'
+import { formatDateRange, formatMomentDate, formatMoney } from '@/lib/format'
+import { rateTypeLabel } from '@/lib/labels'
 import type { PayslipData } from '@/lib/payroll/payslip'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 
+// Stacked rows rather than a table, so it reads the same on a phone and on paper
 export default function Payslip({ data }: { data: PayslipData }) {
   const { run, contractor, items, phpTotal } = data
   const paid = items.every((li) => li.paidAt !== null) ? items[0] : null
 
   return (
-    <article className="max-w-3xl">
-      <header className="flex items-start justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold">Payslip</h1>
-          <p className="text-sm text-gray-600">
-            {formatDate(run.payrollPeriod.startDate)} to {formatDate(run.payrollPeriod.endDate)}
-          </p>
-        </div>
-        <div className="text-right text-sm">
-          <div className="font-medium">{contractor.name}</div>
-          <div className="text-gray-600">{contractor.email}</div>
-        </div>
+    <article className="max-w-3xl rounded-xl border bg-card p-5 shadow-xs sm:p-8 print:max-w-none print:border-0 print:p-0 print:shadow-none">
+      <header className="flex items-center justify-between gap-3 border-b pb-5">
+        <Logo />
+        <StatusBadge status={paid ? 'PAID' : 'UNPAID'} label={paid ? 'Paid' : 'Not paid yet'} />
       </header>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Client</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Hours</TableHead>
-            <TableHead>Rate</TableHead>
-            <TableHead>Amount</TableHead>
-            <TableHead className="text-right">PHP</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {items.map((li) => (
-            <TableRow key={li.id}>
-              <TableCell className="whitespace-normal">
-                {li.engagement.client.name}
-                {li.notes && <div className="text-xs text-gray-500">{li.notes}</div>}
-              </TableCell>
-              <TableCell>{li.rateType.replace('_', ' ')}</TableCell>
-              <TableCell>{li.hours ? li.hours.toString() : '—'}</TableCell>
-              <TableCell>{formatMoney(li.currency, li.rateAmount)}</TableCell>
-              <TableCell>
-                {formatMoney(li.currency, li.totalAmount)}
-                {li.currency !== 'PHP' && li.exchangeRate && (
-                  <div className="text-xs text-gray-500">at {li.exchangeRate.toString()}</div>
-                )}
-              </TableCell>
-              <TableCell className="text-right">
-                {li.totalAmountPhp ? formatMoney('PHP', li.totalAmountPhp) : '—'}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-
-      <div className="mt-4 text-right text-lg font-semibold">
-        Total: {formatMoney('PHP', phpTotal)}
+      <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:justify-between">
+        <div>
+          <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Prepared for</div>
+          <div className="mt-1 font-semibold">{contractor.name}</div>
+          <div className="text-sm text-muted-foreground">{contractor.email}</div>
+        </div>
+        <div className="sm:text-right">
+          <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Pay period</div>
+          <div className="mt-1 font-semibold">
+            {formatDateRange(run.payrollPeriod.startDate, run.payrollPeriod.endDate)}
+          </div>
+        </div>
       </div>
 
-      <dl className="mt-6 text-sm grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
-        <dt className="text-gray-600">Status</dt>
-        <dd className="font-medium">{paid ? 'Paid' : 'Not paid yet'}</dd>
-        {paid?.paidAt && (
-          <>
-            <dt className="text-gray-600">Paid on</dt>
-            <dd>{formatDate(paid.paidAt)}</dd>
-          </>
-        )}
-        {paid?.paidTo && (
-          <>
-            <dt className="text-gray-600">Paid to</dt>
-            <dd>{paid.paidTo}</dd>
-          </>
-        )}
-        {paid?.paymentReference && (
-          <>
-            <dt className="text-gray-600">Reference</dt>
-            <dd>{paid.paymentReference}</dd>
-          </>
-        )}
-      </dl>
+      <div className="mt-5 rounded-lg bg-secondary px-4 py-3.5">
+        <div className="text-sm text-secondary-foreground">Total pay</div>
+        <div className="text-2xl font-semibold tabular-nums sm:text-3xl">{formatMoney('PHP', phpTotal)}</div>
+      </div>
+
+      <ul className="mt-5 divide-y">
+        {items.map((li) => (
+          <li key={li.id} className="flex justify-between gap-4 py-3.5">
+            <div className="min-w-0">
+              <div className="font-medium">{li.engagement.client.name}</div>
+              <div className="mt-0.5 text-sm text-muted-foreground">
+                {rateTypeLabel(li.rateType)}
+                {li.hours && ` · ${li.hours} hrs at ${formatMoney(li.currency, li.rateAmount)}`}
+              </div>
+              {li.notes && <div className="mt-0.5 text-xs text-muted-foreground">{li.notes}</div>}
+            </div>
+            <div className="shrink-0 text-right tabular-nums">
+              <div className="font-medium">
+                {li.totalAmountPhp ? formatMoney('PHP', li.totalAmountPhp) : '—'}
+              </div>
+              {li.currency !== 'PHP' && (
+                <div className="mt-0.5 text-xs text-muted-foreground">
+                  {formatMoney(li.currency, li.totalAmount)}
+                  {li.exchangeRate && ` at ${li.exchangeRate.toString()}`}
+                </div>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      {paid && (
+        <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 border-t pt-5 text-sm">
+          {paid.paidAt && (
+            <>
+              <dt className="text-muted-foreground">Paid on</dt>
+              <dd className="font-medium">{formatMomentDate(paid.paidAt)}</dd>
+            </>
+          )}
+          {paid.paidTo && (
+            <>
+              <dt className="text-muted-foreground">Paid to</dt>
+              <dd className="font-medium">{paid.paidTo}</dd>
+            </>
+          )}
+          {paid.paymentReference && (
+            <>
+              <dt className="text-muted-foreground">Reference</dt>
+              <dd className="font-medium break-all">{paid.paymentReference}</dd>
+            </>
+          )}
+        </dl>
+      )}
     </article>
   )
 }

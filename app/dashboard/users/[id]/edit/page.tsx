@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation'
 import { requirePagePermission } from '@/lib/authz'
 import { prisma } from '@/lib/prisma'
 import UserForm from '@/components/users/UserForm'
+import PageHeader from '@/components/shell/PageHeader'
+import { FormPanel } from '@/components/shell/Panels'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -32,20 +34,22 @@ export default async function EditUserPage({ params }: PageProps) {
   })
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-semibold mb-6">Edit User</h1>
-      <UserForm
-        userId={user.id}
-        isSelf={user.id === session.user.id}
-        contractors={contractors}
-        initialData={{
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          isActive: user.isActive,
-          contractorId: user.contractor?.id ?? null,
-        }}
-      />
+    <div className="space-y-6">
+      <PageHeader title="Edit User" back={{ href: '/dashboard/users', label: 'Users' }} />
+      <FormPanel>
+        <UserForm
+          userId={user.id}
+          isSelf={user.id === session.user.id}
+          contractors={contractors}
+          initialData={{
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            isActive: user.isActive,
+            contractorId: user.contractor?.id ?? null,
+          }}
+        />
+      </FormPanel>
     </div>
   )
 }

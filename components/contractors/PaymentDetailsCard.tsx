@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Badge } from '@/components/ui/badge'
+import { StatusBadge } from '@/components/ui/status-badge'
+import { useFeedback } from '@/components/ui/feedback'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -14,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Notice } from '@/components/ui/notice'
 
 // Local copy of the labels, because lib/payment-details.ts is server-only (it decrypts)
 const METHODS = [
@@ -44,6 +46,7 @@ export default function PaymentDetailsCard({
   details: Detail[]
 }) {
   const router = useRouter()
+  const { confirm } = useFeedback()
   const [form, setForm] = useState(EMPTY)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [isOpen, setIsOpen] = useState(false)
@@ -90,7 +93,7 @@ export default function PaymentDetailsCard({
       return true
     } catch (err) {
       console.error('Payment detail error:', err)
-      setError('Network error — please try again')
+      setError('Network error. Please try again.')
       return false
     } finally {
       setIsBusy(false)
@@ -107,25 +110,27 @@ export default function PaymentDetailsCard({
   }
 
   async function handleDelete(id: string) {
-    if (window.confirm('Delete this payment detail? This cannot be undone.')) {
-      await send(`/api/payment-details/${id}`, 'DELETE')
-    }
+    const confirmed = await confirm({
+      title: 'Delete this payment detail?',
+      description: 'This cannot be undone.',
+      confirmLabel: 'Delete',
+      danger: true,
+    })
+    if (confirmed) await send(`/api/payment-details/${id}`, 'DELETE')
   }
 
   return (
-    <Card className="max-w-lg mt-8">
+    <Card className="max-w-2xl">
       <CardHeader>
         <CardTitle>Payment details</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {error && (
-          <div className="bg-red-50 text-red-700 text-sm p-3 rounded-md border border-red-200">
-            {error}
-          </div>
+          <Notice tone="error">{error}</Notice>
         )}
 
         {details.length === 0 && !isOpen && (
-          <p className="text-sm text-gray-500">No payment details yet.</p>
+          <p className="text-sm text-muted-foreground">No payment details yet.</p>
         )}
 
         {details.map((detail) => (
@@ -135,9 +140,9 @@ export default function PaymentDetailsCard({
                 {METHODS.find(([value]) => value === detail.method)?.[1] ?? detail.method}
                 {detail.bankName ? ` — ${detail.bankName}` : ''}
               </span>
-              {detail.isDefault && <Badge>Default</Badge>}
+              {detail.isDefault && <StatusBadge status="ACTIVE" label="Default" />}
             </div>
-            <div className="text-gray-600 mt-1">
+            <div className="text-muted-foreground mt-1">
               {detail.accountName} · {detail.accountNumberMasked}
             </div>
             <div className="flex gap-2 mt-3">

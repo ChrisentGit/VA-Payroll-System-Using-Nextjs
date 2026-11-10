@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Notice } from '@/components/ui/notice'
 
 export default function PayrollSettingsForm({ payFrequency }: { payFrequency: string }) {
   const router = useRouter()
@@ -44,16 +45,12 @@ export default function PayrollSettingsForm({ payFrequency }: { payFrequency: st
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 max-w-md">
+    <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
-        <div className="bg-red-50 text-red-700 text-sm p-3 rounded-md border border-red-200">
-          {error}
-        </div>
+        <Notice tone="error">{error}</Notice>
       )}
       {message && (
-        <div className="bg-green-50 text-green-700 text-sm p-3 rounded-md border border-green-200">
-          {message}
-        </div>
+        <Notice tone="success">{message}</Notice>
       )}
 
       <div>
@@ -67,7 +64,7 @@ export default function PayrollSettingsForm({ payFrequency }: { payFrequency: st
             <SelectItem value="SEMI_MONTHLY">Twice a month</SelectItem>
           </SelectContent>
         </Select>
-        <p className="text-sm text-gray-500 mt-2">
+        <p className="text-sm text-muted-foreground mt-2">
           Applies to new payroll periods. On a twice-monthly schedule, monthly retainers are
           split across the two periods.
         </p>

@@ -4,6 +4,12 @@ import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { clearAttempts, countAttempt } from '@/lib/throttle'
 import { NO_SUCH_USER_HASH, normalizeEmail } from '@/lib/users'
+import {
+  DEMO_ADMIN_EMAIL,
+  DEMO_CONTRACTOR_EMAIL,
+  DEMO_EMAIL_DOMAIN,
+  isDemoMode,
+} from '@/lib/demo'
 
 const MAX_ATTEMPTS_PER_EMAIL = 10
 const MAX_ATTEMPTS_PER_IP = 50
@@ -67,6 +73,34 @@ export async function verifyLogin(rawEmail: unknown, password: unknown, ip: stri
 
   await clearAttempts(emailKey)
   await recordLoginEvent('auth.login_succeeded', user.email, user.id, { ip })
+
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    sessionVersion: user.sessionVersion,
+    mustChangePassword: user.mustChangePassword,
+  }
+}
+
+// These sign-ins need no password, so they only work when demo mode is on and
+// the database holds nothing but demo accounts. Turning on demo mode by mistake
+// over real data therefore opens nothing.
+export async function verifyDemoLogin(account: unknown) {
+  if (!isDemoMode()) return null
+
+  const email =
+    account === 'admin' ? DEMO_ADMIN_EMAIL : account === 'contractor' ? DEMO_CONTRACTOR_EMAIL : null
+  if (!email) return null
+
+  const realAccounts = await prisma.user.count({
+    where: { NOT: { email: { endsWith: `@${DEMO_EMAIL_DOMAIN}` } } },
+  })
+  if (realAccounts > 0) return null
+
+  const user = await prisma.user.findUnique({ where: { email } })
+  if (!user?.isActive) return null
 
   return {
     id: user.id,

@@ -1,78 +1,56 @@
-"use client";
+import type { Metadata } from 'next'
+import Link from 'next/link'
+import { CheckCircle2 } from 'lucide-react'
+import { isDemoMode } from '@/lib/demo'
+import DemoSignIn from '@/components/auth/DemoSignIn'
+import LoginForm from '@/components/auth/LoginForm'
+import { Logo } from '@/components/shell/Logo'
 
-import { useState } from "react";
-import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+export const metadata: Metadata = { title: 'Sign in' }
+
+const HIGHLIGHTS = [
+  'Approve timesheets before they reach payroll',
+  'Convert USD, EUR and AUD pay to PHP',
+  'Give every contractor a clear payslip',
+]
 
 export default function LoginPage() {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
-
-    const result = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
-
-    setLoading(false);
-
-    if (result?.code === "too_many_attempts") {
-      setError("Too many attempts. Please wait 15 minutes and try again.");
-    } else if (result?.error) {
-      setError("Invalid email or password.");
-    } else {
-      router.push("/dashboard");
-      router.refresh();
-    }
-  };
+  const isDemo = isDemoMode()
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>VA Payroll — Login</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div>
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-            {error && <p className="text-sm text-red-600">{error}</p>}
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Logging in..." : "Log in"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+    <div className="grid min-h-dvh lg:grid-cols-2">
+      <aside className="hidden flex-col justify-between bg-sidebar p-12 text-white lg:flex">
+        <Link href="/" className="w-fit">
+          <Logo onDark />
+        </Link>
+        <div>
+          <h2 className="max-w-md text-3xl font-semibold">
+            Payroll for your remote team, without the spreadsheets.
+          </h2>
+          <ul className="mt-8 space-y-3 text-sidebar-foreground">
+            {HIGHLIGHTS.map((highlight) => (
+              <li key={highlight} className="flex items-center gap-3">
+                <CheckCircle2 className="size-5 shrink-0 text-blue-300" aria-hidden />
+                {highlight}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <p className="text-sm text-sidebar-foreground">© {new Date().getFullYear()} Bluemoso</p>
+      </aside>
+
+      <main className="flex items-center justify-center p-6">
+        <div className="w-full max-w-sm">
+          <Link href="/" className="mb-8 block w-fit lg:hidden">
+            <Logo />
+          </Link>
+          <h1 className="text-2xl font-semibold">{isDemo ? 'Try the demo' : 'Welcome back'}</h1>
+          <p className="mt-1 mb-6 text-sm text-muted-foreground">
+            {isDemo ? 'Pick a side to explore. No account needed.' : 'Sign in to your account.'}
+          </p>
+          {isDemo ? <DemoSignIn /> : <LoginForm />}
+        </div>
+      </main>
     </div>
-  );
+  )
 }

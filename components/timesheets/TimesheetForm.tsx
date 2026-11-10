@@ -13,6 +13,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Notice } from '@/components/ui/notice'
+import { todayInCompanyZone } from '@/lib/format'
+
+const QUICK_HOURS = ['4', '6', '8']
 
 interface Option {
   id: string
@@ -25,6 +29,8 @@ interface TimesheetFormProps {
   // The contractor portal saves through its own API and returns to its own list
   apiPath?: string
   returnTo?: string
+  // One-tap hour buttons, for contractors entering time on a phone
+  quickHours?: boolean
   initialData?: {
     engagementId: string
     date: string
@@ -38,14 +44,16 @@ export default function TimesheetForm({
   timesheetId,
   apiPath = '/api/timesheets',
   returnTo = '/dashboard/timesheets',
+  quickHours = false,
   initialData,
 }: TimesheetFormProps) {
   const router = useRouter()
   const isEditing = Boolean(timesheetId)
 
   const [formData, setFormData] = useState({
-    engagementId: initialData?.engagementId || '',
-    date: initialData?.date?.split('T')[0] || new Date().toISOString().split('T')[0],
+    // With only one option there is nothing to choose
+    engagementId: initialData?.engagementId || (engagements.length === 1 ? engagements[0].id : ''),
+    date: initialData?.date?.split('T')[0] || todayInCompanyZone(),
     hours: initialData?.hours || '',
     description: initialData?.description || '',
   })
@@ -84,17 +92,15 @@ export default function TimesheetForm({
       router.refresh()
     } catch (err) {
       console.error('Form submit error:', err)
-      setError('Network error — please try again')
+      setError('Network error. Please try again.')
       setIsSubmitting(false)
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
+    <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
-        <div className="bg-red-50 text-red-700 text-sm p-3 rounded-md border border-red-200">
-          {error}
-        </div>
+        <Notice tone="error">{error}</Notice>
       )}
 
       <div>
@@ -116,8 +122,8 @@ export default function TimesheetForm({
           </SelectContent>
         </Select>
         {isEditing && (
-          <p className="text-xs text-gray-500 mt-1">
-            Engagement can&apos;t be changed after creation — delete and re-add if needed.
+          <p className="text-xs text-muted-foreground mt-1">
+            The engagement can&apos;t be changed. To use a different one, delete this entry and add it again.
           </p>
         )}
       </div>
@@ -134,14 +140,34 @@ export default function TimesheetForm({
       </div>
 
       <div>
-        <Label htmlFor="hours">Hours (optional — leave blank for deliverable-based work)</Label>
+        <Label htmlFor="hours">Hours</Label>
         <Input
           id="hours"
           type="number"
           step="0.25"
+          min="0"
+          inputMode="decimal"
           value={formData.hours}
           onChange={(e) => handleChange('hours', e.target.value)}
         />
+        {quickHours && (
+          <div className="mt-2 flex gap-2">
+            {QUICK_HOURS.map((hours) => (
+              <Button
+                key={hours}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                aria-pressed={formData.hours === hours}
+                onClick={() => handleChange('hours', hours)}
+              >
+                {hours} hrs
+              </Button>
+            ))}
+          </div>
+        )}
+        <p className="mt-1.5 text-xs text-muted-foreground">Leave blank for deliverable-based work.</p>
       </div>
 
       <div>

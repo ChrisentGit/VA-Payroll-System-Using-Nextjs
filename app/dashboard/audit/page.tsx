@@ -1,7 +1,11 @@
 import Link from 'next/link'
+import { ScrollText } from 'lucide-react'
 import { requirePagePermission } from '@/lib/authz'
 import { prisma } from '@/lib/prisma'
+import PageHeader from '@/components/shell/PageHeader'
+import { TablePanel } from '@/components/shell/Panels'
 import { Button } from '@/components/ui/button'
+import { EmptyState } from '@/components/ui/empty-state'
 import {
   Table,
   TableBody,
@@ -32,56 +36,60 @@ export default async function AuditLogPage({ searchParams }: PageProps) {
   const entries = rows.slice(0, PAGE_SIZE)
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-semibold mb-6">Audit Log</h1>
+    <div>
+      <PageHeader title="Audit Log" description="Every change and sign-in, newest first. Times are UTC." />
 
       {entries.length === 0 ? (
-        <p className="text-gray-500">Nothing here yet.</p>
+        <EmptyState
+          icon={ScrollText}
+          title="Nothing here yet"
+          description="Changes and sign-ins will be recorded here as they happen."
+        />
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>When (UTC)</TableHead>
-              <TableHead>Who</TableHead>
-              <TableHead>Action</TableHead>
-              <TableHead>Record</TableHead>
-              <TableHead>Details</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {entries.map((entry) => (
-              <TableRow key={entry.id}>
-                <TableCell className="tabular-nums">
-                  {entry.createdAt.toISOString().slice(0, 19).replace('T', ' ')}
-                </TableCell>
-                <TableCell>{entry.actorEmail}</TableCell>
-                <TableCell>{entry.action}</TableCell>
-                <TableCell className="text-xs text-gray-600">
-                  {entry.entityType} {entry.entityId}
-                </TableCell>
-                <TableCell className="text-xs text-gray-600 whitespace-normal break-all">
-                  {JSON.stringify(entry.metadata)}
-                </TableCell>
+        <TablePanel>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>When</TableHead>
+                <TableHead>Who</TableHead>
+                <TableHead>Action</TableHead>
+                <TableHead>Record</TableHead>
+                <TableHead>Details</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {entries.map((entry) => (
+                <TableRow key={entry.id}>
+                  <TableCell className="text-xs text-muted-foreground tabular-nums">
+                    {entry.createdAt.toISOString().slice(0, 19).replace('T', ' ')}
+                  </TableCell>
+                  <TableCell>{entry.actorEmail}</TableCell>
+                  <TableCell>
+                    <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{entry.action}</code>
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {entry.entityType} {entry.entityId}
+                  </TableCell>
+                  <TableCell className="min-w-64 font-mono text-xs break-all whitespace-normal text-muted-foreground">
+                    {JSON.stringify(entry.metadata)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TablePanel>
       )}
 
-      <div className="flex gap-2 mt-4">
+      <div className="mt-4 flex gap-2">
         {page > 1 && (
-          <Link href={`/dashboard/audit?page=${page - 1}`}>
-            <Button variant="outline" size="sm">
-              Newer
-            </Button>
-          </Link>
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/dashboard/audit?page=${page - 1}`}>Newer</Link>
+          </Button>
         )}
         {rows.length > PAGE_SIZE && (
-          <Link href={`/dashboard/audit?page=${page + 1}`}>
-            <Button variant="outline" size="sm">
-              Older
-            </Button>
-          </Link>
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/dashboard/audit?page=${page + 1}`}>Older</Link>
+          </Button>
         )}
       </div>
     </div>

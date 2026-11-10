@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Notice } from '@/components/ui/notice'
 
 interface ClientFormProps {
   clientId?: string
@@ -73,17 +74,15 @@ export default function ClientForm({ clientId, initialData }: ClientFormProps) {
       router.refresh()
     } catch (err) {
       console.error('Form submit error:', err)
-      setError('Network error — please try again')
+      setError('Network error. Please try again.')
       setIsSubmitting(false)
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
+    <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
-        <div className="bg-red-50 text-red-700 text-sm p-3 rounded-md border border-red-200">
-          {error}
-        </div>
+        <Notice tone="error">{error}</Notice>
       )}
 
       <div>
@@ -115,7 +114,7 @@ export default function ClientForm({ clientId, initialData }: ClientFormProps) {
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <Label htmlFor="billingCurrency">Billing currency</Label>
           <Select

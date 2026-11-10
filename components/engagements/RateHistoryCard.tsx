@@ -12,7 +12,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
+import { StatusBadge } from '@/components/ui/status-badge'
+import { Notice } from '@/components/ui/notice'
+import { formatDate, formatMoney, todayInCompanyZone } from '@/lib/format'
 
 interface RateEntry {
   id: string
@@ -35,7 +37,7 @@ export default function RateHistoryCard({
   const [amount, setAmount] = useState('')
   const [currency, setCurrency] = useState('PHP')
   const [effectiveFrom, setEffectiveFrom] = useState(
-    new Date().toISOString().split('T')[0]
+    todayInCompanyZone()
   )
   const [notes, setNotes] = useState('')
   const [error, setError] = useState('')
@@ -68,7 +70,7 @@ export default function RateHistoryCard({
   }
 
   return (
-    <div className="border rounded-lg p-4 max-w-lg">
+    <div className="max-w-2xl rounded-xl border bg-card p-5 shadow-xs">
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold">Rate history</h2>
         {!showForm && (
@@ -84,11 +86,9 @@ export default function RateHistoryCard({
           className="space-y-3 mb-4 border-b pb-4"
         >
           {error && (
-            <div className="bg-red-50 text-red-700 text-sm p-2 rounded-md border border-red-200">
-              {error}
-            </div>
+            <Notice tone="error">{error}</Notice>
           )}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="amount">Amount</Label>
               <Input
@@ -153,7 +153,7 @@ export default function RateHistoryCard({
       )}
 
       {rates.length === 0 ? (
-        <p className="text-sm text-gray-500">No rates recorded yet.</p>
+        <p className="text-sm text-muted-foreground">No rates recorded yet.</p>
       ) : (
         <ul className="space-y-2">
           {rates.map((r) => (
@@ -162,20 +162,16 @@ export default function RateHistoryCard({
               className="flex items-center justify-between text-sm border-b pb-2 last:border-b-0"
             >
               <div>
-                <span className="font-medium">
-                  {r.currency} {r.amount}
-                </span>
-                <span className="text-gray-500 ml-2">
-                  {new Date(r.effectiveFrom).toLocaleDateString()} —{' '}
-                  {r.effectiveTo
-                    ? new Date(r.effectiveTo).toLocaleDateString()
-                    : 'present'}
+                <span className="font-medium tabular-nums">{formatMoney(r.currency, r.amount)}</span>
+                <span className="text-muted-foreground ml-2">
+                  {formatDate(new Date(r.effectiveFrom))} to{' '}
+                  {r.effectiveTo ? formatDate(new Date(r.effectiveTo)) : 'present'}
                 </span>
                 {r.notes && (
-                  <p className="text-gray-400 text-xs mt-0.5">{r.notes}</p>
+                  <p className="text-muted-foreground text-xs mt-0.5">{r.notes}</p>
                 )}
               </div>
-              {!r.effectiveTo && <Badge>Current</Badge>}
+              {!r.effectiveTo && <StatusBadge status="ACTIVE" label="Current" />}
             </li>
           ))}
         </ul>

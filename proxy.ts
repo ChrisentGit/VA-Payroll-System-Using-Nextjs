@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
+import { DEMO_READ_ONLY_MESSAGE, isDemoMode } from '@/lib/demo'
 
 // Reachable while a temporary password is still waiting to be changed
 const PASSWORD_CHANGE_PATHS = ['/dashboard/account', '/portal/account', '/api/account/password']
@@ -29,6 +30,10 @@ export default auth((req) => {
   const { pathname } = req.nextUrl
   const isApi = pathname.startsWith('/api/')
   const isProtected = isApi || /^\/(dashboard|portal)(\/|$)/.test(pathname)
+
+  if (isDemoMode() && isApi && req.method !== 'GET' && req.method !== 'HEAD') {
+    return NextResponse.json({ error: DEMO_READ_ONLY_MESSAGE }, { status: 403 })
+  }
 
   if (isProtected && !req.auth) {
     return isApi

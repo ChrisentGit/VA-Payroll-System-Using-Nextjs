@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma'
 import EngagementForm from '@/components/engagements/EngagementForm'
 import RateHistoryCard from '@/components/engagements/RateHistoryCard'
 import MilestonesCard from '@/components/engagements/MilestonesCard'
+import PageHeader from '@/components/shell/PageHeader'
+import { FormPanel } from '@/components/shell/Panels'
 
 interface EditPageProps {
   params: Promise<{ id: string }>
@@ -34,25 +36,27 @@ export default async function EditEngagementPage({ params }: EditPageProps) {
   }
 
   return (
-    <div className="p-6 space-y-8">
+    <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold mb-6">Edit Engagement</h1>
-        <EngagementForm
-          contractors={contractors.map((c) => ({ id: c.id, label: c.name }))}
-          clients={clients.map((c) => ({ id: c.id, label: c.name }))}
-          engagementId={engagement.id}
-          initialData={{
-            contractorId: engagement.contractorId,
-            clientId: engagement.clientId,
-            title: engagement.title,
-            rateType: engagement.rateType,
-            retainerBasis: engagement.retainerBasis,
-            projectPayMode: engagement.projectPayMode,
-            status: engagement.status,
-            startDate: engagement.startDate?.toISOString() || null,
-            endDate: engagement.endDate?.toISOString() || null,
-          }}
-        />
+        <PageHeader title="Edit Engagement" back={{ href: '/dashboard/engagements', label: 'Engagements' }} />
+        <FormPanel>
+          <EngagementForm
+            contractors={contractors.map((c) => ({ id: c.id, label: c.name }))}
+            clients={clients.map((c) => ({ id: c.id, label: c.name }))}
+            engagementId={engagement.id}
+            initialData={{
+              contractorId: engagement.contractorId,
+              clientId: engagement.clientId,
+              title: engagement.title,
+              rateType: engagement.rateType,
+              retainerBasis: engagement.retainerBasis,
+              projectPayMode: engagement.projectPayMode,
+              status: engagement.status,
+              startDate: engagement.startDate?.toISOString() || null,
+              endDate: engagement.endDate?.toISOString() || null,
+            }}
+          />
+        </FormPanel>
       </div>
 
       <RateHistoryCard

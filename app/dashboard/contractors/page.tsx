@@ -1,9 +1,15 @@
+import Link from 'next/link'
+import { Plus, Users } from 'lucide-react'
 import { requirePagePermission } from '@/lib/authz'
 import { can } from '@/lib/permissions'
-import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
+import DeleteButton from '@/components/DeleteButton'
+import PageHeader from '@/components/shell/PageHeader'
+import { TablePanel } from '@/components/shell/Panels'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { EmptyState } from '@/components/ui/empty-state'
+import { Person } from '@/components/ui/person'
+import { StatusBadge } from '@/components/ui/status-badge'
 import {
   Table,
   TableBody,
@@ -12,7 +18,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import DeleteContractorButton from '@/components/contractors/DeleteContractorButton'
 
 export default async function ContractorsPage() {
   const session = await requirePagePermission('directory:read')
@@ -22,57 +27,66 @@ export default async function ContractorsPage() {
     orderBy: { createdAt: 'desc' },
   })
 
+  const addButton = canEdit && (
+    <Button asChild>
+      <Link href="/dashboard/contractors/new">
+        <Plus aria-hidden />
+        Add Contractor
+      </Link>
+    </Button>
+  )
+
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold">Contractors</h1>
-        {canEdit && (
-          <Link href="/dashboard/contractors/new">
-            <Button>Add Contractor</Button>
-          </Link>
-        )}
-      </div>
+    <div>
+      <PageHeader
+        title="Contractors"
+        description="Everyone you pay, and how to reach them."
+        actions={contractors.length > 0 && addButton}
+      />
 
       {contractors.length === 0 ? (
-        <p className="text-gray-500">No contractors yet.</p>
+        <EmptyState
+          icon={Users}
+          title="No contractors yet"
+          description="Add a contractor, then link them to a client with an engagement."
+          action={addButton}
+        />
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Phone</TableHead>
-              <TableHead>Status</TableHead>
-              {canEdit && <TableHead className="text-right">Actions</TableHead>}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {contractors.map((c) => (
-              <TableRow key={c.id}>
-                <TableCell>{c.name}</TableCell>
-                <TableCell>{c.email}</TableCell>
-                <TableCell>{c.phone || '—'}</TableCell>
-                <TableCell>
-                  <Badge
-                    variant={c.status === 'ACTIVE' ? 'default' : 'secondary'}
-                  >
-                    {c.status}
-                  </Badge>
-                </TableCell>
-                {canEdit && (
-                  <TableCell className="text-right space-x-2">
-                    <Link href={`/dashboard/contractors/${c.id}/edit`}>
-                      <Button variant="outline" size="sm">
-                        Edit
-                      </Button>
-                    </Link>
-                    <DeleteContractorButton id={c.id} />
-                  </TableCell>
-                )}
+        <TablePanel>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Phone</TableHead>
+                <TableHead>Status</TableHead>
+                {canEdit && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {contractors.map((c) => (
+                <TableRow key={c.id}>
+                  <TableCell>
+                    <Person name={c.name} detail={c.email} />
+                  </TableCell>
+                  <TableCell>{c.phone || '—'}</TableCell>
+                  <TableCell>
+                    <StatusBadge status={c.status} />
+                  </TableCell>
+                  {canEdit && (
+                    <TableCell>
+                      <div className="flex justify-end gap-2">
+                        <Button asChild variant="outline" size="sm">
+                          <Link href={`/dashboard/contractors/${c.id}/edit`}>Edit</Link>
+                        </Button>
+                        <DeleteButton url={`/api/contractors/${c.id}`} noun="contractor" />
+                      </div>
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TablePanel>
       )}
     </div>
   )

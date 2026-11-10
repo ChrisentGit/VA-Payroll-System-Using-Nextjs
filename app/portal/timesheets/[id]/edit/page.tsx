@@ -1,7 +1,10 @@
 import { notFound, redirect } from 'next/navigation'
 import { requirePortalContractor } from '@/lib/authz'
 import { prisma } from '@/lib/prisma'
+import PageHeader from '@/components/shell/PageHeader'
+import { FormPanel } from '@/components/shell/Panels'
 import TimesheetForm from '@/components/timesheets/TimesheetForm'
+import { Notice } from '@/components/ui/notice'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -24,32 +27,35 @@ export default async function PortalEditTimesheetPage({ params }: PageProps) {
   const { engagement } = timesheet
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-semibold mb-6">Edit Timesheet</h1>
+    <div>
+      <PageHeader title="Edit Timesheet" back={{ href: '/portal/timesheets', label: 'Timesheets' }} />
       {timesheet.status === 'REJECTED' && timesheet.rejectionReason && (
-        <div className="bg-amber-50 text-amber-900 text-sm p-3 rounded-md border border-amber-200 mb-4 max-w-lg">
-          Sent back: {timesheet.rejectionReason}
-        </div>
+        <Notice tone="warning" title="Sent back" className="mb-4 max-w-2xl">
+          {timesheet.rejectionReason}
+        </Notice>
       )}
-      <TimesheetForm
-        apiPath="/api/portal/timesheets"
-        returnTo="/portal/timesheets"
-        timesheetId={timesheet.id}
-        engagements={[
-          {
-            id: engagement.id,
-            label: engagement.title
-              ? `${engagement.client.name} — ${engagement.title}`
-              : engagement.client.name,
-          },
-        ]}
-        initialData={{
-          engagementId: timesheet.engagementId,
-          date: timesheet.date.toISOString(),
-          hours: timesheet.hours?.toString() ?? null,
-          description: timesheet.description,
-        }}
-      />
+      <FormPanel>
+        <TimesheetForm
+          apiPath="/api/portal/timesheets"
+          returnTo="/portal/timesheets"
+          quickHours
+          timesheetId={timesheet.id}
+          engagements={[
+            {
+              id: engagement.id,
+              label: engagement.title
+                ? `${engagement.client.name}, ${engagement.title}`
+                : engagement.client.name,
+            },
+          ]}
+          initialData={{
+            engagementId: timesheet.engagementId,
+            date: timesheet.date.toISOString(),
+            hours: timesheet.hours?.toString() ?? null,
+            description: timesheet.description,
+          }}
+        />
+      </FormPanel>
     </div>
   )
 }

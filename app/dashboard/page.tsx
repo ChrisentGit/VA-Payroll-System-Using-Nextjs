@@ -1,13 +1,18 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import { Banknote, BriefcaseBusiness, Building2, Clock, HandCoins, Users, Wallet } from 'lucide-react'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { can } from '@/lib/permissions'
-import { formatDate, formatMoney } from '@/lib/format'
+import { formatDateRange, formatMoney } from '@/lib/format'
+import { firstName } from '@/lib/labels'
 import { paymentProgress } from '@/lib/payroll/payments'
-import { Badge } from '@/components/ui/badge'
+import PageHeader from '@/components/shell/PageHeader'
+import { TablePanel } from '@/components/shell/Panels'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import { EmptyState } from '@/components/ui/empty-state'
+import { Stat } from '@/components/ui/stat'
+import { StatusBadge } from '@/components/ui/status-badge'
 import {
   Table,
   TableBody,
@@ -19,19 +24,6 @@ import {
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
 
-function Stat({ label, value, href }: { label: string; value: string | number; href?: string }) {
-  const tile = (
-    <Card className={href ? 'hover:bg-gray-50 transition-colors' : undefined}>
-      <CardContent>
-        <div className="text-sm text-gray-600">{label}</div>
-        <div className="text-2xl font-semibold mt-1 tabular-nums">{value}</div>
-      </CardContent>
-    </Card>
-  )
-
-  return href ? <Link href={href}>{tile}</Link> : tile
-}
-
 async function DirectoryStats() {
   const [contractors, clients, engagements] = await Promise.all([
     prisma.contractor.count({ where: { status: 'ACTIVE' } }),
@@ -41,9 +33,9 @@ async function DirectoryStats() {
 
   return (
     <>
-      <Stat label="Active contractors" value={contractors} href="/dashboard/contractors" />
-      <Stat label="Active clients" value={clients} href="/dashboard/clients" />
-      <Stat label="Active engagements" value={engagements} href="/dashboard/engagements" />
+      <Stat label="Active contractors" value={contractors} icon={Users} href="/dashboard/contractors" />
+      <Stat label="Active clients" value={clients} icon={Building2} href="/dashboard/clients" />
+      <Stat label="Active engagements" value={engagements} icon={BriefcaseBusiness} href="/dashboard/engagements" />
     </>
   )
 }
@@ -51,7 +43,15 @@ async function DirectoryStats() {
 async function ApprovalStat() {
   const waiting = await prisma.timesheet.count({ where: { status: 'SUBMITTED' } })
 
-  return <Stat label="Timesheets to approve" value={waiting} href="/dashboard/timesheets" />
+  return (
+    <Stat
+      label="Timesheets to approve"
+      value={waiting}
+      icon={Clock}
+      href="/dashboard/timesheets"
+      highlight={waiting > 0}
+    />
+  )
 }
 
 function loadPayrollTotals() {
@@ -74,8 +74,17 @@ async function PayrollStats() {
 
   return (
     <>
-      <Stat label="Finalized, not yet paid" value={formatMoney('PHP', unpaid._sum.totalAmountPhp ?? 0)} />
-      <Stat label="Paid in the last 30 days" value={formatMoney('PHP', paid._sum.totalAmountPhp ?? 0)} />
+      <Stat
+        label="Finalized, not yet paid"
+        value={formatMoney('PHP', unpaid._sum.totalAmountPhp ?? 0)}
+        icon={HandCoins}
+        href="/dashboard/payroll"
+      />
+      <Stat
+        label="Paid in the last 30 days"
+        value={formatMoney('PHP', paid._sum.totalAmountPhp ?? 0)}
+        icon={Banknote}
+      />
     </>
   )
 }
@@ -91,48 +100,57 @@ async function RecentRuns() {
   })
 
   if (runs.length === 0) {
-    return <p className="text-sm text-gray-500">No payroll runs yet.</p>
+    return (
+      <EmptyState
+        icon={Wallet}
+        title="No payroll runs yet"
+        description="Create a payroll period and generate your first run."
+        action={
+          <Button asChild>
+            <Link href="/dashboard/payroll/new">New Period</Link>
+          </Button>
+        }
+      />
+    )
   }
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Period</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Contractors paid</TableHead>
-          <TableHead className="text-right">Actions</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {runs.map((run) => {
-          const { paid, total } = paymentProgress(run.lineItems)
+    <TablePanel>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Period</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Contractors paid</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {runs.map((run) => {
+            const { paid, total } = paymentProgress(run.lineItems)
 
-          return (
-            <TableRow key={run.id}>
-              <TableCell>
-                {formatDate(run.payrollPeriod.startDate)} to {formatDate(run.payrollPeriod.endDate)}
-              </TableCell>
-              <TableCell>
-                <Badge variant={run.status === 'FINALIZED' ? 'default' : 'secondary'}>
-                  {run.status}
-                </Badge>
-              </TableCell>
-              <TableCell className="tabular-nums">
-                {run.status === 'FINALIZED' ? `${paid} of ${total}` : '—'}
-              </TableCell>
-              <TableCell className="text-right">
-                <Link href={`/dashboard/payroll/runs/${run.id}`}>
-                  <Button variant="outline" size="sm">
-                    View
+            return (
+              <TableRow key={run.id}>
+                <TableCell className="font-medium">
+                  {formatDateRange(run.payrollPeriod.startDate, run.payrollPeriod.endDate)}
+                </TableCell>
+                <TableCell>
+                  <StatusBadge status={run.status} />
+                </TableCell>
+                <TableCell className="tabular-nums">
+                  {run.status === 'FINALIZED' ? `${paid} of ${total}` : '—'}
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={`/dashboard/payroll/runs/${run.id}`}>View</Link>
                   </Button>
-                </Link>
-              </TableCell>
-            </TableRow>
-          )
-        })}
-      </TableBody>
-    </Table>
+                </TableCell>
+              </TableRow>
+            )
+          })}
+        </TableBody>
+      </Table>
+    </TablePanel>
   )
 }
 
@@ -144,10 +162,13 @@ export default async function DashboardPage() {
   if (can(role, 'portal:access')) redirect('/portal')
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-semibold mb-6">Dashboard</h1>
+    <div>
+      <PageHeader
+        title={`Welcome back, ${firstName(session.user.name)}`}
+        description="Here is where payroll stands today."
+      />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-10">
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {can(role, 'directory:read') && <DirectoryStats />}
         {can(role, 'timesheets:manage') && <ApprovalStat />}
         {can(role, 'payroll:manage') && <PayrollStats />}
@@ -155,7 +176,7 @@ export default async function DashboardPage() {
 
       {can(role, 'payroll:manage') && (
         <section>
-          <h2 className="text-lg font-semibold mb-3">Recent payroll runs</h2>
+          <h2 className="mb-3 text-base font-semibold">Recent payroll runs</h2>
           <RecentRuns />
         </section>
       )}

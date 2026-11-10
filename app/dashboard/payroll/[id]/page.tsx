@@ -1,10 +1,15 @@
 import { requirePagePermission } from '@/lib/authz'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { Wallet } from 'lucide-react'
 import { prisma } from '@/lib/prisma'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { formatDateRange, formatMoment } from '@/lib/format'
+import { payFrequencyLabel } from '@/lib/labels'
 import GenerateRunButton from '@/components/payroll/GenerateRunButton'
+import PageHeader from '@/components/shell/PageHeader'
+import { Button } from '@/components/ui/button'
+import { EmptyState } from '@/components/ui/empty-state'
+import { StatusBadge } from '@/components/ui/status-badge'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -22,45 +27,36 @@ export default async function PayrollPeriodPage({ params }: PageProps) {
   if (!period) notFound()
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-semibold mb-2">
-        Payroll Period: {period.startDate.toLocaleDateString()} —{' '}
-        {period.endDate.toLocaleDateString()}
-      </h1>
+    <div>
+      <PageHeader
+        title={formatDateRange(period.startDate, period.endDate)}
+        description={`Pay schedule: ${payFrequencyLabel(period.frequency)}`}
+        back={{ href: '/dashboard/payroll', label: 'Payroll' }}
+      />
 
-      <p className="text-sm text-gray-500 mb-6">
-        Pay schedule: {period.frequency === 'SEMI_MONTHLY' ? 'Twice a month' : 'Monthly'}
-      </p>
-
-      {period.runs.length === 0 && (
-        <div className="mb-6">
-          <GenerateRunButton periodId={period.id} />
-        </div>
-      )}
-
-      <h2 className="text-lg font-medium mb-3">Runs</h2>
       {period.runs.length === 0 ? (
-        <p className="text-gray-500">No runs generated yet for this period.</p>
+        <EmptyState
+          icon={Wallet}
+          title="No run generated yet"
+          description="Generating a draft gathers approved timesheets, retainers and completed milestones for this period."
+          action={<GenerateRunButton periodId={period.id} />}
+        />
       ) : (
-        <ul className="space-y-2">
+        <ul className="space-y-3">
           {period.runs.map((run) => (
             <li
               key={run.id}
-              className="flex items-center justify-between border rounded-md p-3"
+              className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-xs sm:flex-row sm:items-center sm:justify-between"
             >
-              <div className="flex items-center gap-3">
-                <Badge variant={run.status === 'FINALIZED' ? 'default' : 'secondary'}>
-                  {run.status}
-                </Badge>
-                <span className="text-sm text-gray-500">
-                  Generated {run.generatedAt.toLocaleString()}
-                </span>
+              <div>
+                <StatusBadge status={run.status} />
+                <p className="mt-1.5 text-sm text-muted-foreground">
+                  Generated {formatMoment(run.generatedAt)}
+                </p>
               </div>
-              <Link href={`/dashboard/payroll/runs/${run.id}`}>
-                <Button variant="outline" size="sm">
-                  View
-                </Button>
-              </Link>
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/dashboard/payroll/runs/${run.id}`}>View run</Link>
+              </Button>
             </li>
           ))}
         </ul>

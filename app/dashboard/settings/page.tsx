@@ -1,6 +1,8 @@
 import { requirePagePermission } from '@/lib/authz'
 import { getPayrollSettings } from '@/lib/payroll/settings'
 import PayrollSettingsForm from '@/components/payroll/PayrollSettingsForm'
+import PageHeader from '@/components/shell/PageHeader'
+import { FormPanel } from '@/components/shell/Panels'
 
 export default async function SettingsPage() {
   await requirePagePermission('payroll:manage')
@@ -8,9 +10,11 @@ export default async function SettingsPage() {
   const settings = await getPayrollSettings()
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-semibold mb-6">Payroll Settings</h1>
-      <PayrollSettingsForm payFrequency={settings.payFrequency} />
+    <div>
+      <PageHeader title="Payroll Settings" description="How often your contractors are paid." />
+      <FormPanel>
+        <PayrollSettingsForm payFrequency={settings.payFrequency} />
+      </FormPanel>
     </div>
   )
 }

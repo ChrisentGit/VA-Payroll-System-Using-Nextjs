@@ -1,7 +1,10 @@
-import { requirePagePermission } from '@/lib/authz'
 import Link from 'next/link'
+import { requirePagePermission } from '@/lib/authz'
 import { getPayrollSettings } from '@/lib/payroll/settings'
+import { payFrequencyLabel } from '@/lib/labels'
 import CreatePeriodForm from '@/components/payroll/CreatePeriodForm'
+import PageHeader from '@/components/shell/PageHeader'
+import { FormPanel } from '@/components/shell/Panels'
 
 export default async function NewPayrollPeriodPage() {
   await requirePagePermission('payroll:manage')
@@ -9,16 +12,22 @@ export default async function NewPayrollPeriodPage() {
   const { payFrequency } = await getPayrollSettings()
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-semibold mb-2">New Payroll Period</h1>
-      <p className="text-sm text-gray-500 mb-6">
-        Pay schedule: {payFrequency === 'SEMI_MONTHLY' ? 'Twice a month' : 'Monthly'} (
-        <Link href="/dashboard/settings" className="underline">
-          change in Settings
-        </Link>
-        )
-      </p>
-      <CreatePeriodForm />
+    <div>
+      <PageHeader
+        title="New Payroll Period"
+        back={{ href: '/dashboard/payroll', label: 'Payroll' }}
+        description={
+          <>
+            Pay schedule: {payFrequencyLabel(payFrequency)}.{' '}
+            <Link href="/dashboard/settings" className="text-primary underline underline-offset-2">
+              Change in Settings
+            </Link>
+          </>
+        }
+      />
+      <FormPanel>
+        <CreatePeriodForm />
+      </FormPanel>
     </div>
   )
 }

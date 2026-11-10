@@ -1,8 +1,16 @@
-import { requirePagePermission } from '@/lib/authz'
 import Link from 'next/link'
+import { Clock, Plus } from 'lucide-react'
+import { requirePagePermission } from '@/lib/authz'
 import { prisma } from '@/lib/prisma'
-import { Button } from '@/components/ui/button'
+import { formatDate } from '@/lib/format'
+import DeleteButton from '@/components/DeleteButton'
+import PageHeader from '@/components/shell/PageHeader'
+import { TablePanel } from '@/components/shell/Panels'
+import ApprovalButtons from '@/components/timesheets/ApprovalButtons'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { EmptyState } from '@/components/ui/empty-state'
+import { StatusBadge } from '@/components/ui/status-badge'
 import {
   Table,
   TableBody,
@@ -11,15 +19,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import DeleteTimesheetButton from '@/components/timesheets/DeleteTimesheetButton'
-import ApprovalButtons from '@/components/timesheets/ApprovalButtons'
-
-const statusVariant: Record<string, 'default' | 'secondary' | 'destructive'> = {
-  DRAFT: 'secondary',
-  SUBMITTED: 'secondary',
-  APPROVED: 'default',
-  REJECTED: 'destructive',
-}
 
 export default async function TimesheetsPage() {
   await requirePagePermission('timesheets:manage')
@@ -29,65 +28,78 @@ export default async function TimesheetsPage() {
     include: { contractor: true, engagement: { include: { client: true } } },
   })
 
+  const addButton = (
+    <Button asChild>
+      <Link href="/dashboard/timesheets/new">
+        <Plus aria-hidden />
+        Submit Timesheet
+      </Link>
+    </Button>
+  )
+
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold">Timesheets</h1>
-        <Link href="/dashboard/timesheets/new">
-          <Button>Submit Timesheet</Button>
-        </Link>
-      </div>
+    <div>
+      <PageHeader
+        title="Timesheets"
+        description="Approve hours before they go into a payroll run."
+        actions={timesheets.length > 0 && addButton}
+      />
 
       {timesheets.length === 0 ? (
-        <p className="text-gray-500">No timesheets yet.</p>
+        <EmptyState
+          icon={Clock}
+          title="No timesheets yet"
+          description="Hours your contractors submit will appear here for approval."
+          action={addButton}
+        />
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>Contractor</TableHead>
-              <TableHead>Client</TableHead>
-              <TableHead>Hours</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {timesheets.map((t) => (
-              <TableRow key={t.id}>
-                <TableCell>{t.date.toLocaleDateString()}</TableCell>
-                <TableCell>{t.contractor.name}</TableCell>
-                <TableCell>{t.engagement.client.name}</TableCell>
-                <TableCell>{t.hours ? t.hours.toString() : '—'}</TableCell>
-                <TableCell>
-                  <Badge variant={statusVariant[t.status] || 'secondary'}>
-                    {t.status}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end items-center gap-2">
-                    {t.payrollLineItemId ? (
-                      <Badge variant="outline">In payroll</Badge>
-                    ) : (
-                      <>
-                        {t.status === 'SUBMITTED' && <ApprovalButtons id={t.id} />}
-                        {t.status === 'APPROVED' && <ApprovalButtons id={t.id} rejectOnly />}
-                        {t.status !== 'APPROVED' && (
-                          <Link href={`/dashboard/timesheets/${t.id}/edit`}>
-                            <Button variant="outline" size="sm">
-                              Edit
-                            </Button>
-                          </Link>
-                        )}
-                        <DeleteTimesheetButton id={t.id} />
-                      </>
-                    )}
-                  </div>
-                </TableCell>
+        <TablePanel>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Contractor</TableHead>
+                <TableHead>Client</TableHead>
+                <TableHead className="text-right">Hours</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {timesheets.map((t) => (
+                <TableRow key={t.id}>
+                  <TableCell>{formatDate(t.date)}</TableCell>
+                  <TableCell className="font-medium">{t.contractor.name}</TableCell>
+                  <TableCell>{t.engagement.client.name}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {t.hours ? t.hours.toString() : '—'}
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge status={t.status} />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center justify-end gap-2">
+                      {t.payrollLineItemId ? (
+                        <Badge variant="outline">In payroll</Badge>
+                      ) : (
+                        <>
+                          {t.status === 'SUBMITTED' && <ApprovalButtons id={t.id} />}
+                          {t.status === 'APPROVED' && <ApprovalButtons id={t.id} rejectOnly />}
+                          {t.status !== 'APPROVED' && (
+                            <Button asChild variant="outline" size="sm">
+                              <Link href={`/dashboard/timesheets/${t.id}/edit`}>Edit</Link>
+                            </Button>
+                          )}
+                          <DeleteButton url={`/api/timesheets/${t.id}`} noun="timesheet entry" />
+                        </>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TablePanel>
       )}
     </div>
   )

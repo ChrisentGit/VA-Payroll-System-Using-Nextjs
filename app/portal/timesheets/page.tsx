@@ -1,18 +1,18 @@
 import Link from 'next/link'
+import { Clock, Plus } from 'lucide-react'
 import { requirePortalContractor } from '@/lib/authz'
 import { prisma } from '@/lib/prisma'
 import { formatDate } from '@/lib/format'
-import { Badge } from '@/components/ui/badge'
+import DeleteButton from '@/components/DeleteButton'
+import PageHeader from '@/components/shell/PageHeader'
 import { Button } from '@/components/ui/button'
-import DeleteTimesheetButton from '@/components/timesheets/DeleteTimesheetButton'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { EmptyState } from '@/components/ui/empty-state'
+import { StatusBadge } from '@/components/ui/status-badge'
+
+const STATUS_LABELS: Record<string, string> = {
+  SUBMITTED: 'Waiting for approval',
+  REJECTED: 'Sent back',
+}
 
 export default async function PortalTimesheetsPage() {
   const { contractor } = await requirePortalContractor()
@@ -23,65 +23,72 @@ export default async function PortalTimesheetsPage() {
     include: { engagement: { include: { client: { select: { name: true } } } } },
   })
 
+  const isOffboarded = contractor.status === 'OFFBOARDED'
+  const addButton = !isOffboarded && (
+    <Button asChild className="w-full sm:w-auto">
+      <Link href="/portal/timesheets/new">
+        <Plus aria-hidden />
+        Log hours
+      </Link>
+    </Button>
+  )
+
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold">Timesheets</h1>
-        {contractor.status !== 'OFFBOARDED' && (
-          <Link href="/portal/timesheets/new">
-            <Button>Submit Timesheet</Button>
-          </Link>
-        )}
-      </div>
+    <div>
+      <PageHeader
+        title="Timesheets"
+        description="Hours you have logged and where they stand."
+        actions={timesheets.length > 0 && addButton}
+      />
 
       {timesheets.length === 0 ? (
-        <p className="text-gray-500">No timesheets yet.</p>
+        <EmptyState
+          icon={Clock}
+          title="No timesheets yet"
+          description="Log your hours and they will be sent for approval."
+          action={addButton}
+        />
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>Client</TableHead>
-              <TableHead>Hours</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Notes</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {timesheets.map((t) => {
-              const canChange = t.status !== 'APPROVED' && !t.payrollLineItemId
+        <ul className="divide-y overflow-hidden rounded-xl border bg-card shadow-xs">
+          {timesheets.map((t) => {
+            const canChange = t.status !== 'APPROVED' && !t.payrollLineItemId && !isOffboarded
 
-              return (
-                <TableRow key={t.id}>
-                  <TableCell>{formatDate(t.date)}</TableCell>
-                  <TableCell>{t.engagement.client.name}</TableCell>
-                  <TableCell>{t.hours ? t.hours.toString() : '—'}</TableCell>
-                  <TableCell>
-                    <Badge variant={t.status === 'APPROVED' ? 'default' : 'secondary'}>
-                      {t.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-sm text-gray-500 whitespace-normal">
-                    {t.status === 'REJECTED' ? t.rejectionReason : t.description || '—'}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {canChange && (
-                      <div className="flex justify-end gap-2">
-                        <Link href={`/portal/timesheets/${t.id}/edit`}>
-                          <Button variant="outline" size="sm">
-                            Edit
-                          </Button>
-                        </Link>
-                        <DeleteTimesheetButton id={t.id} apiPath="/api/portal/timesheets" />
-                      </div>
-                    )}
-                  </TableCell>
-                </TableRow>
-              )
-            })}
-          </TableBody>
-        </Table>
+            return (
+              <li key={t.id} className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold">{formatDate(t.date)}</div>
+                    <div className="mt-0.5 text-sm text-muted-foreground">{t.engagement.client.name}</div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <div className="font-semibold tabular-nums">{t.hours ? `${t.hours} hrs` : '—'}</div>
+                  </div>
+                </div>
+
+                <div className="mt-2">
+                  <StatusBadge status={t.status} label={STATUS_LABELS[t.status]} />
+                </div>
+
+                {t.status === 'REJECTED' && t.rejectionReason ? (
+                  <p className="mt-2 text-sm text-red-700">{t.rejectionReason}</p>
+                ) : (
+                  t.description && <p className="mt-2 text-sm text-muted-foreground">{t.description}</p>
+                )}
+
+                {canChange && (
+                  <div className="mt-3 flex gap-2">
+                    <Button asChild variant="outline" size="sm">
+                      <Link href={`/portal/timesheets/${t.id}/edit`}>
+                        {t.status === 'REJECTED' ? 'Fix and resubmit' : 'Edit'}
+                      </Link>
+                    </Button>
+                    <DeleteButton url={`/api/portal/timesheets/${t.id}`} noun="timesheet entry" />
+                  </div>
+                )}
+              </li>
+            )
+          })}
+        </ul>
       )}
     </div>
   )

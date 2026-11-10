@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Notice } from '@/components/ui/notice'
 
 interface ExchangeRateFormProps {
   runId: string
@@ -42,21 +43,19 @@ export default function ExchangeRateForm({ runId, currencies }: ExchangeRateForm
   }
 
   return (
-    <form onSubmit={handleSubmit} className="border rounded-lg p-4 mb-6 max-w-lg space-y-3">
+    <form onSubmit={handleSubmit} className="mb-6 space-y-3 max-w-2xl rounded-xl border bg-card p-5 shadow-xs">
       <div>
         <h2 className="font-semibold">Exchange rates to PHP</h2>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-muted-foreground">
           Enter how many pesos 1 unit is worth. These are locked when the run is finalized.
         </p>
       </div>
 
       {error && (
-        <div className="bg-red-50 text-red-700 text-sm p-3 rounded-md border border-red-200">
-          {error}
-        </div>
+        <Notice tone="error">{error}</Notice>
       )}
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid gap-4 sm:grid-cols-2">
         {currencies.map(({ currency }) => (
           <div key={currency}>
             <Label htmlFor={`rate-${currency}`}>1 {currency} in PHP</Label>

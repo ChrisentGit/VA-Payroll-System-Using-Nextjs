@@ -3,47 +3,71 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+import { useFeedback } from '@/components/ui/feedback'
+import { sendRequest } from '@/lib/client-request'
 
 export default function PaymentButtons({
   runId,
   contractorId,
+  contractorName,
   isPaid,
 }: {
   runId: string
   contractorId: string
+  contractorName: string
   isPaid: boolean
 }) {
   const router = useRouter()
+  const { ask, confirm, toast } = useFeedback()
   const [isBusy, setIsBusy] = useState(false)
 
-  async function send(init: RequestInit, query = '') {
+  async function send(
+    options: { method: string; body?: object },
+    successMessage: string,
+    query = ''
+  ) {
     setIsBusy(true)
-    const response = await fetch(`/api/payroll-runs/${runId}/payments${query}`, init)
+    const result = await sendRequest(`/api/payroll-runs/${runId}/payments${query}`, {
+      ...options,
+      fallbackError: 'Failed to save payment',
+    })
 
-    if (response.ok) {
+    if (result.ok) {
+      toast(successMessage)
       router.refresh()
     } else {
-      const data = await response.json()
-      alert(data.error || 'Failed to save payment')
+      toast(result.error, 'error')
     }
     setIsBusy(false)
   }
 
-  function markPaid() {
-    const paymentReference = window.prompt('Payment reference (optional, e.g. bank or GCash ref no.)')
+  async function markPaid() {
+    const paymentReference = await ask({
+      title: `Mark ${contractorName} as paid?`,
+      description: 'Their payslip will show the payment and the account it went to.',
+      label: 'Payment reference (optional)',
+      placeholder: 'Bank or GCash reference number',
+      confirmLabel: 'Mark Paid',
+    })
     if (paymentReference === null) return
 
-    send({
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contractorId, paymentReference }),
-    })
+    await send({ method: 'POST', body: { contractorId, paymentReference } }, 'Payment recorded')
   }
 
-  function undo() {
-    if (window.confirm('Undo this payment record? The contractor will show as unpaid.')) {
-      send({ method: 'DELETE' }, `?contractorId=${encodeURIComponent(contractorId)}`)
-    }
+  async function undo() {
+    const confirmed = await confirm({
+      title: 'Undo this payment record?',
+      description: `${contractorName} will show as unpaid.`,
+      confirmLabel: 'Undo Payment',
+      danger: true,
+    })
+    if (!confirmed) return
+
+    await send(
+      { method: 'DELETE' },
+      'Payment record removed',
+      `?contractorId=${encodeURIComponent(contractorId)}`
+    )
   }
 
   return isPaid ? (

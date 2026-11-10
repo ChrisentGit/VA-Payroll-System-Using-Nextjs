@@ -1,9 +1,16 @@
+import Link from 'next/link'
+import { BriefcaseBusiness, Plus } from 'lucide-react'
 import { requirePagePermission } from '@/lib/authz'
 import { can } from '@/lib/permissions'
-import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
+import { formatMoney } from '@/lib/format'
+import { rateTypeLabel } from '@/lib/labels'
+import DeleteButton from '@/components/DeleteButton'
+import PageHeader from '@/components/shell/PageHeader'
+import { TablePanel } from '@/components/shell/Panels'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { EmptyState } from '@/components/ui/empty-state'
+import { StatusBadge } from '@/components/ui/status-badge'
 import {
   Table,
   TableBody,
@@ -12,7 +19,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import DeleteEngagementButton from '@/components/engagements/DeleteEngagementButton'
 
 export default async function EngagementsPage() {
   const session = await requirePagePermission('directory:read')
@@ -27,64 +33,74 @@ export default async function EngagementsPage() {
     },
   })
 
+  const addButton = canEdit && (
+    <Button asChild>
+      <Link href="/dashboard/engagements/new">
+        <Plus aria-hidden />
+        Add Engagement
+      </Link>
+    </Button>
+  )
+
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold">Engagements</h1>
-        {canEdit && (
-          <Link href="/dashboard/engagements/new">
-            <Button>Add Engagement</Button>
-          </Link>
-        )}
-      </div>
+    <div>
+      <PageHeader
+        title="Engagements"
+        description="Who works for which client, and at what rate."
+        actions={engagements.length > 0 && addButton}
+      />
 
       {engagements.length === 0 ? (
-        <p className="text-gray-500">No engagements yet.</p>
+        <EmptyState
+          icon={BriefcaseBusiness}
+          title="No engagements yet"
+          description="An engagement links a contractor to a client and sets their rate."
+          action={addButton}
+        />
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Contractor</TableHead>
-              <TableHead>Client</TableHead>
-              <TableHead>Rate type</TableHead>
-              <TableHead>Current rate</TableHead>
-              <TableHead>Status</TableHead>
-              {canEdit && <TableHead className="text-right">Actions</TableHead>}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {engagements.map((e) => {
-              const currentRate = e.rates[0]
-              return (
-                <TableRow key={e.id}>
-                  <TableCell>{e.contractor.name}</TableCell>
-                  <TableCell>{e.client.name}</TableCell>
-                  <TableCell>{e.rateType.replace('_', ' ')}</TableCell>
-                  <TableCell>
-                    {currentRate
-                      ? `${currentRate.currency} ${currentRate.amount}`
-                      : '—'}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={e.status === 'active' ? 'default' : 'secondary'}>
-                      {e.status}
-                    </Badge>
-                  </TableCell>
-                  {canEdit && (
-                    <TableCell className="text-right space-x-2">
-                      <Link href={`/dashboard/engagements/${e.id}/edit`}>
-                        <Button variant="outline" size="sm">
-                          Edit
-                        </Button>
-                      </Link>
-                      <DeleteEngagementButton id={e.id} />
+        <TablePanel>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Contractor</TableHead>
+                <TableHead>Client</TableHead>
+                <TableHead>Rate type</TableHead>
+                <TableHead className="text-right">Current rate</TableHead>
+                <TableHead>Status</TableHead>
+                {canEdit && <TableHead className="text-right">Actions</TableHead>}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {engagements.map((e) => {
+                const currentRate = e.rates[0]
+
+                return (
+                  <TableRow key={e.id}>
+                    <TableCell className="font-medium">{e.contractor.name}</TableCell>
+                    <TableCell>{e.client.name}</TableCell>
+                    <TableCell>{rateTypeLabel(e.rateType)}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {currentRate ? formatMoney(currentRate.currency, currentRate.amount) : '—'}
                     </TableCell>
-                  )}
-                </TableRow>
-              )
-            })}
-          </TableBody>
-        </Table>
+                    <TableCell>
+                      <StatusBadge status={e.status} />
+                    </TableCell>
+                    {canEdit && (
+                      <TableCell>
+                        <div className="flex justify-end gap-2">
+                          <Button asChild variant="outline" size="sm">
+                            <Link href={`/dashboard/engagements/${e.id}/edit`}>Edit</Link>
+                          </Button>
+                          <DeleteButton url={`/api/engagements/${e.id}`} noun="engagement" />
+                        </div>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        </TablePanel>
       )}
     </div>
   )

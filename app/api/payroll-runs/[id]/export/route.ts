@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { authorizeApi } from '@/lib/authz'
 import { recordAudit } from '@/lib/audit'
 import { decrypt } from '@/lib/crypto'
-import { formatDate } from '@/lib/format'
+import { isoDate } from '@/lib/format'
 import { methodLabel } from '@/lib/payment-details'
 import { toCsv } from '@/lib/payroll/csv'
 
@@ -98,7 +98,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       metadata: { rows: rows.length },
     })
 
-    const period = `${formatDate(run.payrollPeriod.startDate)}-to-${formatDate(run.payrollPeriod.endDate)}`
+    const period = `${isoDate(run.payrollPeriod.startDate)}-to-${isoDate(run.payrollPeriod.endDate)}`
 
     return new NextResponse(toCsv([HEADER, ...rows]), {
       headers: {

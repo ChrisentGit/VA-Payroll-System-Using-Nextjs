@@ -12,7 +12,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
+import { StatusBadge } from '@/components/ui/status-badge'
+import { Notice } from '@/components/ui/notice'
+import { formatDate, formatMoney, todayInCompanyZone } from '@/lib/format'
 
 interface MilestoneEntry {
   id: string
@@ -29,7 +31,7 @@ interface MilestonesCardProps {
   milestones: MilestoneEntry[]
 }
 
-const today = () => new Date().toISOString().split('T')[0]
+const today = () => todayInCompanyZone()
 
 export default function MilestonesCard({ engagementId, payMode, milestones }: MilestonesCardProps) {
   const router = useRouter()
@@ -78,20 +80,18 @@ export default function MilestonesCard({ engagementId, payMode, milestones }: Mi
   }
 
   return (
-    <div className="border rounded-lg p-4 max-w-lg">
+    <div className="max-w-2xl rounded-xl border bg-card p-5 shadow-xs">
       <h2 className="font-semibold mb-1">
         {isOnCompletion ? 'Project completion' : 'Milestones'}
       </h2>
-      <p className="text-sm text-gray-500 mb-3">
+      <p className="text-sm text-muted-foreground mb-3">
         {isOnCompletion
           ? 'Paid once, in the first payroll run after the project is marked complete.'
           : 'Each milestone is paid once, in the first payroll run after it is marked done.'}
       </p>
 
       {error && (
-        <div className="bg-red-50 text-red-700 text-sm p-3 rounded-md border border-red-200 mb-3">
-          {error}
-        </div>
+        <Notice tone="error">{error}</Notice>
       )}
 
       {milestones.length > 0 && (
@@ -100,13 +100,13 @@ export default function MilestonesCard({ engagementId, payMode, milestones }: Mi
             <li key={m.id} className="flex items-center justify-between gap-3 border rounded-md p-3">
               <div>
                 <p className="text-sm font-medium">{m.title}</p>
-                <p className="text-sm text-gray-500">
-                  {m.currency} {m.amount}
-                  {m.completedAt && ` · Done ${m.completedAt.split('T')[0]}`}
+                <p className="text-sm text-muted-foreground">
+                  {formatMoney(m.currency, m.amount)}
+                  {m.completedAt && ` · Done ${formatDate(new Date(m.completedAt))}`}
                 </p>
               </div>
               {m.inPayroll ? (
-                <Badge>In payroll</Badge>
+                <StatusBadge status="FINALIZED" label="In payroll" />
               ) : (
                 <div className="flex gap-2">
                   {!isOnCompletion && (
@@ -173,7 +173,7 @@ export default function MilestonesCard({ engagementId, payMode, milestones }: Mi
               required
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="milestoneAmount">Amount</Label>
               <Input

@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Notice } from '@/components/ui/notice'
 
 const ROLE_LABELS = {
   SUPER_ADMIN: 'Super admin',
@@ -75,17 +76,15 @@ export default function UserForm({ userId, isSelf, contractors, initialData }: U
       router.refresh()
     } catch (err) {
       console.error('User form error:', err)
-      setError('Network error — please try again')
+      setError('Network error. Please try again.')
       setIsSubmitting(false)
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
+    <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
-        <div className="bg-red-50 text-red-700 text-sm p-3 rounded-md border border-red-200">
-          {error}
-        </div>
+        <Notice tone="error">{error}</Notice>
       )}
 
       <div>
@@ -148,7 +147,7 @@ export default function UserForm({ userId, isSelf, contractors, initialData }: U
             </SelectContent>
           </Select>
           {contractors.length === 0 && (
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               Every contractor already has a login. Add a contractor first.
             </p>
           )}
@@ -168,7 +167,7 @@ export default function UserForm({ userId, isSelf, contractors, initialData }: U
           onChange={(e) => update('password', e.target.value)}
           required={!isEditing}
         />
-        <p className="text-xs text-gray-500 mt-1">
+        <p className="text-xs text-muted-foreground mt-1">
           At least 12 characters. Ask the user to change it after signing in.
         </p>
       </div>

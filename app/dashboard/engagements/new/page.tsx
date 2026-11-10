@@ -1,6 +1,8 @@
 import { requirePagePermission } from '@/lib/authz'
 import { prisma } from '@/lib/prisma'
 import EngagementForm from '@/components/engagements/EngagementForm'
+import PageHeader from '@/components/shell/PageHeader'
+import { FormPanel } from '@/components/shell/Panels'
 
 export default async function NewEngagementPage() {
   await requirePagePermission('directory:write')
@@ -11,12 +13,14 @@ export default async function NewEngagementPage() {
   ])
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-semibold mb-6">Add Engagement</h1>
-      <EngagementForm
-        contractors={contractors.map((c) => ({ id: c.id, label: c.name }))}
-        clients={clients.map((c) => ({ id: c.id, label: c.name }))}
-      />
+    <div className="space-y-6">
+      <PageHeader title="Add Engagement" back={{ href: '/dashboard/engagements', label: 'Engagements' }} />
+      <FormPanel>
+        <EngagementForm
+          contractors={contractors.map((c) => ({ id: c.id, label: c.name }))}
+          clients={clients.map((c) => ({ id: c.id, label: c.name }))}
+        />
+      </FormPanel>
     </div>
   )
 }

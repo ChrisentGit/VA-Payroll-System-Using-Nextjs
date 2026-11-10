@@ -1,18 +1,12 @@
 import Link from 'next/link'
+import { ChevronRight, FileText } from 'lucide-react'
 import { requirePortalContractor } from '@/lib/authz'
 import { prisma } from '@/lib/prisma'
-import { formatDate, formatMoney } from '@/lib/format'
+import { formatDateRange, formatMoney } from '@/lib/format'
 import { groupPayments } from '@/lib/payroll/payments'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import PageHeader from '@/components/shell/PageHeader'
+import { EmptyState } from '@/components/ui/empty-state'
+import { StatusBadge } from '@/components/ui/status-badge'
 
 export default async function PortalPayslipsPage() {
   const { contractor } = await requirePortalContractor()
@@ -30,49 +24,42 @@ export default async function PortalPayslipsPage() {
   })
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-semibold mb-6">Payslips</h1>
+    <div>
+      <PageHeader title="Payslips" description="A record of every payment." />
 
       {runs.length === 0 ? (
-        <p className="text-gray-500">No payslips yet.</p>
+        <EmptyState
+          icon={FileText}
+          title="No payslips yet"
+          description="Your payslip will appear here once a payroll run is finalized."
+        />
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Period</TableHead>
-              <TableHead>Amount</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {runs.map((run) => {
-              const [payment] = groupPayments(run.lineItems)
+        <ul className="divide-y overflow-hidden rounded-xl border bg-card shadow-xs">
+          {runs.map((run) => {
+            const [payment] = groupPayments(run.lineItems)
 
-              return (
-                <TableRow key={run.id}>
-                  <TableCell>
-                    {formatDate(run.payrollPeriod.startDate)} to{' '}
-                    {formatDate(run.payrollPeriod.endDate)}
-                  </TableCell>
-                  <TableCell>{formatMoney('PHP', payment.phpTotal)}</TableCell>
-                  <TableCell>
-                    <Badge variant={payment.isPaid ? 'default' : 'secondary'}>
-                      {payment.isPaid ? 'Paid' : 'Not paid yet'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Link href={`/portal/payslips/${run.id}`}>
-                      <Button variant="outline" size="sm">
-                        View
-                      </Button>
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              )
-            })}
-          </TableBody>
-        </Table>
+            return (
+              <li key={run.id}>
+                <Link
+                  href={`/portal/payslips/${run.id}`}
+                  className="flex items-center gap-3 p-4 transition-colors hover:bg-muted/50"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold tabular-nums">{formatMoney('PHP', payment.phpTotal)}</div>
+                    <div className="mt-0.5 text-sm text-muted-foreground">
+                      {formatDateRange(run.payrollPeriod.startDate, run.payrollPeriod.endDate)}
+                    </div>
+                  </div>
+                  <StatusBadge
+                    status={payment.isPaid ? 'PAID' : 'UNPAID'}
+                    label={payment.isPaid ? 'Paid' : 'Not paid yet'}
+                  />
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                </Link>
+              </li>
+            )
+          })}
+        </ul>
       )}
     </div>
   )
